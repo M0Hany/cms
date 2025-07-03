@@ -1,4 +1,4 @@
-import { settingsModel } from "./settings-model";
+import { settingsModel } from "./settings-model"
 
 export interface ComponentTemplate {
   name: string
@@ -6,7 +6,7 @@ export interface ComponentTemplate {
   generateHTML: (config: any) => string
 }
 
-class ComponentRegistryClass {
+class PreviewComponentRegistryClass {
   private templates: Map<string, ComponentTemplate> = new Map()
 
   constructor() {
@@ -181,7 +181,7 @@ class ComponentRegistryClass {
     this.register("products-showroom", {
       name: "Products Showroom",
       defaultConfig: {
-        mode: "title", // "title" or "image"
+        mode: "title",
         title: "",
         categoryNumber: "",
         objectIds: "",
@@ -213,6 +213,80 @@ class ComponentRegistryClass {
           productFunctionCall = `getProductsManual([${objectIDsArray.join(", ")}])`
         }
 
+        const alpineInit = `
+<script>
+function initializeAlpineShowroom() {
+  window.getProductsFromCategory = async function(prodCount, categoryNumber, priorityObjectIDs = []) {
+    const settings = window.settingsModel?.getSettings() || {};
+    const clientAlg = algoliasearch(settings.app_id, settings.api_search_key);
+    const indexAlg = clientAlg.initIndex(settings.index_name);
+    const objectIDFilters = priorityObjectIDs.map((id) => \`objectID:\${id}\`).join(" OR ");
+
+    try {
+      const { hits: priorityHits } = await indexAlg.search("", {
+        filters: objectIDFilters.length ? objectIDFilters : \`category = \${categoryNumber}\`,
+        analytics: false,
+      });
+
+      if (priorityObjectIDs.length) {
+        const { hits: categoryHits } = await indexAlg.search("", {
+          filters: \`category = \${categoryNumber}\`,
+          analytics: false,
+        });
+
+        const uniqueCategoryHits = categoryHits.filter(
+          (hit) => !priorityObjectIDs.includes(hit.objectID)
+        );
+
+        return [...priorityHits, ...uniqueCategoryHits].slice(0, prodCount);
+      } else {
+        return priorityHits.sort((a, b) => b.popularity - a.popularity).slice(0, prodCount);
+      }
+    } catch (error) {
+      return [];
+    }
+  };
+
+  window.getDiscountedProductsFromCategory = async function(prodCount, categoryNumber, priorityObjectIDs = []) {
+    const settings = window.settingsModel?.getSettings() || {};
+    const clientAlg = algoliasearch(settings.app_id, settings.api_search_key);
+    const indexAlg = clientAlg.initIndex(settings.index_name);
+    const objectIDFilters = priorityObjectIDs.map((id) => \`objectID:\${id}\`).join(" OR ");
+
+    try {
+      const { hits: priorityHits } = await indexAlg.search("", {
+        filters: objectIDFilters.length ? objectIDFilters : \`category = \${categoryNumber} AND percentoff > 0\`,
+        analytics: false,
+      });
+
+      if (priorityObjectIDs.length) {
+        const { hits: categoryHits } = await indexAlg.search("", {
+          filters: \`category = \${categoryNumber} AND percentoff > 0\`,
+          analytics: false,
+        });
+
+        const uniqueCategoryHits = categoryHits.filter(
+          (hit) => !priorityObjectIDs.includes(hit.objectID)
+        );
+
+        return [...priorityHits, ...uniqueCategoryHits].slice(0, prodCount);
+      } else {
+        return priorityHits.sort((a, b) => b.popularity - a.popularity).slice(0, prodCount);
+      }
+    } catch (error) {
+      return [];
+    }
+  };
+
+  window.updateImageUrl = function(url) {
+    if (!url) return '';
+    return url;
+  };
+}
+
+initializeAlpineShowroom();
+</script>`;
+
         let headerHtml = ""
         if (config.mode === "title") {
           headerHtml = `<div class="showroom-heading">
@@ -220,8 +294,10 @@ class ComponentRegistryClass {
 </div>
   <div class="component-container" style="margin-left: 10px;">`
         } else {
+          // Only add RTL class if direction is explicitly set to RTL
+          const containerClass = `showroom-container${isRTL ? ' showroom-container-rtl' : ''}`
           headerHtml = `<div class="component-container">
-  <div class="showroom-container showroom-container-rtl">
+  <div class="${containerClass}">
     <a style="text-decoration: none; display: block; position: relative" href="${config.bannerConfig.linkUrl}">
       <div class="showroom-banner-wrapper">
         <span class="showroom-desktop-banner">
@@ -240,7 +316,8 @@ class ComponentRegistryClass {
     <div class="showroom-products-wrapper">`
         }
 
-        let htmlCode = `<div class="showroom-component" id="showroom-${Date.now()}">
+        let htmlCode = `${alpineInit}
+<div class="showroom-component" id="showroom-${Date.now()}">
   ${headerHtml}
   <div class="showroom-container">
     <div class="showroom-products-wrapper">
@@ -250,7 +327,7 @@ class ComponentRegistryClass {
 
         if (productFunctionCall) {
           htmlCode += `
-          <section x-data="products" x-intersect.once.margin.300px="${productFunctionCall}">`
+          <section x-data="{ products: [] }" x-init="products = await ${productFunctionCall}">`
         }
 
         htmlCode += `
@@ -342,4 +419,4 @@ class ComponentRegistryClass {
   }
 }
 
-export const ComponentRegistry = new ComponentRegistryClass()
+export const PreviewComponentRegistry = new PreviewComponentRegistryClass()

@@ -3,15 +3,22 @@
 import { useState, useEffect } from "react"
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd"
 import { Button } from "@/components/ui/button"
-import { Trash2, Plus, Settings, GripVertical, Copy, Check, Eye, Edit, ChevronUp, ChevronDown, Code, Smartphone } from "lucide-react"
+import { Trash2, Plus, Settings as SettingsIcon, GripVertical, Copy, Check, Eye, Edit, ChevronUp, ChevronDown, Code, Smartphone } from "lucide-react"
 import { ComponentDialog } from "@/components/component-dialog"
 import { AddComponentDialog } from "@/components/add-component-dialog"
 import { MobileTutorialDialog } from "@/components/mobile-tutorial-dialog"
 import { AssetRegistry } from "@/lib/asset-registry"
+import { PreviewAssetRegistry } from "@/lib/preview-asset-registry"
 import { ComponentRegistry } from "@/lib/component-registry"
 import { generateHTML, parseComponents } from "@/lib/html-generator"
 import type { Component } from "@/types/component"
+import type { Settings } from "@/types/settings"
 import { ShowroomSettingsDialog } from "@/components/showroom-settings-dialog"
+import Cookies from "js-cookie"
+import { settingsModel } from "@/lib/settings-model"
+
+// Cookie prefix constant
+const COOKIE_PREFIX = "showroom_"
 
 // Component type to display name mapping
 const componentDisplayNames: Record<string, string> = {
@@ -26,86 +33,85 @@ const componentDisplayNames: Record<string, string> = {
 
 export default function WebPageBuilder() {
   const [components, setComponents] = useState<Component[]>([])
-  const [htmlCode, setHtmlCode] = useState("")
   const [selectedComponent, setSelectedComponent] = useState<Component | null>(null)
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
-  const [previewKey, setPreviewKey] = useState(0)
-  const [rawHtmlPreview, setRawHtmlPreview] = useState("")
-  const [showRawPreview, setShowRawPreview] = useState(false)
-  const [copied, setCopied] = useState(false)
+  const [showAddDialog, setShowAddDialog] = useState(false)
+  const [showSettingsDialog, setShowSettingsDialog] = useState(false)
+  const [showMobileTutorial, setShowMobileTutorial] = useState(false)
+  const [copiedCode, setCopiedCode] = useState(false)
+  const [expandedComponents, setExpandedComponents] = useState<Set<string>>(new Set())
+  const [hasSettings, setHasSettings] = useState(false)
+  const [settings, setSettings] = useState<Settings | null>(null)
   const [showingProducts, setShowingProducts] = useState(false)
-  const [mode, setMode] = useState<'edit' | 'preview'>('edit')
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [htmlCode, setHtmlCode] = useState("")
   const [activeTab, setActiveTab] = useState<'default' | 'custom'>('default')
-  const [isMobileTutorialOpen, setIsMobileTutorialOpen] = useState(false)
-  const [isShowroomSettingsOpen, setIsShowroomSettingsOpen] = useState(false)
 
-  // Initialize default assets on component mount
+  // Initialize settings from cookies
   useEffect(() => {
-    AssetRegistry.injectDefaultAssets()
+    // Get settings from cookies
+    const app_id = Cookies.get(COOKIE_PREFIX + "app_id")
+    const api_search_key = Cookies.get(COOKIE_PREFIX + "api_search_key")
+    const index_name = Cookies.get(COOKIE_PREFIX + "index_name")
+    const currency = Cookies.get(COOKIE_PREFIX + "currency")
+
+    // Only pass settings if required values are present
+    if (app_id && api_search_key && index_name) {
+      const settings: Settings = {
+        app_id,
+        api_search_key,
+        index_name,
+        currency: currency || "EGP" // Use cookie value or default
+      }
+      
+      // Initialize settings model first
+      settingsModel.initializeSettings(settings)
+      setSettings(settings)
+      setHasSettings(true)
+    }
   }, [])
 
   // Update HTML when components change
   useEffect(() => {
-    const newHtml = generateHTML(components)
-    setHtmlCode(newHtml)
-    setPreviewKey((prev) => prev + 1)
-    // Reset showing products state when components are modified
-    setShowingProducts(false)
-  }, [components])
-
-  // Debounced update for raw HTML preview
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      setRawHtmlPreview(htmlCode)
-      setPreviewKey((prev) => prev + 1)
-      // Reinitialize interactive components after preview update
-      setTimeout(() => {
-        AssetRegistry.initializeInteractiveComponents()
-      }, 100)
-    }, 300) // 300ms debounce
-
-    return () => clearTimeout(timeoutId)
-  }, [htmlCode])
-
-  // Parse components when HTML changes
-  useEffect(() => {
-    try {
-      const parsedComponents = parseComponents(htmlCode)
-      if (parsedComponents.length > 0) {
-        setShowRawPreview(false)
-      } else {
-        setShowRawPreview(true)
-      }
-    } catch (error) {
-      console.warn("Could not parse HTML:", error)
-      setShowRawPreview(true)
+    if (!hasSettings) {
+      return
     }
-  }, [htmlCode])
+
+    const previewHtml = generateHTML(components, true)
+    const codeHtml = generateHTML(components, false)
+    setHtmlCode(codeHtml)
+
+    requestAnimationFrame(() => {
+      const previewContainer = document.getElementById("preview")
+      if (previewContainer) {
+        previewContainer.innerHTML = previewHtml
+        PreviewAssetRegistry.injectDefaultAssets()
+      }
+    })
+  }, [components, hasSettings, settings])
 
   const handleAddComponent = (type: string) => {
-    const componentTemplate = ComponentRegistry.getTemplate(type)
-    if (componentTemplate) {
-      setSelectedComponent({
+    if (type) {
+      const template = ComponentRegistry.getTemplate(type)
+      if (!template) {
+        return
+      }
+
+      const newComponent: Component = {
         id: `${type}-${Date.now()}`,
         type,
-        config: componentTemplate.defaultConfig,
-        html: "",
-      })
-      setIsAddDialogOpen(false)
+        config: template.defaultConfig,
+        html: "",  // Don't generate HTML yet
+      }
+
+      setSelectedComponent(newComponent)
+      setShowAddDialog(false)
       setIsDialogOpen(true)
     }
   }
 
   const handleAddCustomComponent = (htmlCode: string) => {
-    try {
-      const parsedComponents = parseComponents(htmlCode, true) // true for custom parsing
-      const newComponents = [...components, ...parsedComponents]
-      setComponents(newComponents)
-      setIsAddDialogOpen(false)
-    } catch (error) {
-      console.error("Failed to parse custom component:", error)
-    }
+    const parsedComponents = parseComponents(htmlCode)
+    setComponents((prevComponents) => [...prevComponents, ...parsedComponents])
   }
 
   const handleEditComponent = (component: Component) => {
@@ -126,7 +132,7 @@ export default function WebPageBuilder() {
           newComponents[existingIndex] = updatedComponent
           return newComponents
         } else {
-          return [...prev, updatedComponent]
+          return [...prev, updatedComponent]  // Add new component here after configuration
         }
       })
     }
@@ -136,9 +142,48 @@ export default function WebPageBuilder() {
   }
 
   const handleSaveComponentCode = (component: Component, newHtml: string) => {
-    const updatedComponent = { ...component, html: newHtml }
+    console.log("[handleSaveComponentCode] Starting to save code changes:", {
+      componentId: component.id,
+      componentType: component.type,
+      newHtmlLength: newHtml.length
+    })
+
+    // Parse the new HTML to extract updated configuration
+    const parsedComponents = parseComponents(newHtml)
+    console.log("[handleSaveComponentCode] Parsed components:", parsedComponents)
+
+    if (parsedComponents.length === 0) {
+      console.warn("[handleSaveComponentCode] No components parsed from HTML, aborting save")
+      return
+    }
+
+    // Get the parsed component's config and HTML
+    const parsedComponent = parsedComponents[0]
+    console.log("[handleSaveComponentCode] Using first parsed component:", {
+      parsedType: parsedComponent.type,
+      parsedConfig: parsedComponent.config
+    })
+
+    const updatedComponent = {
+      ...component,
+      config: parsedComponent.config,
+      html: parsedComponent.html
+    }
+    console.log("[handleSaveComponentCode] Created updated component:", {
+      id: updatedComponent.id,
+      type: updatedComponent.type,
+      configChanged: JSON.stringify(component.config) !== JSON.stringify(parsedComponent.config),
+      htmlChanged: component.html !== parsedComponent.html
+    })
+
     setComponents((prev) => {
       const existingIndex = prev.findIndex((c) => c.id === component.id)
+      console.log("[handleSaveComponentCode] Updating components state:", {
+        found: existingIndex >= 0,
+        index: existingIndex,
+        totalComponents: prev.length
+      })
+
       if (existingIndex >= 0) {
         const newComponents = [...prev]
         newComponents[existingIndex] = updatedComponent
@@ -149,10 +194,12 @@ export default function WebPageBuilder() {
     setIsDialogOpen(false)
     setSelectedComponent(null)
     setShowingProducts(false)
+    console.log("[handleSaveComponentCode] Finished saving code changes")
   }
 
   const handleDeleteComponent = (id: string) => {
     setComponents((prev) => prev.filter((c) => c.id !== id))
+    setShowingProducts(false)
   }
 
   const handleDragEnd = (result: any) => {
@@ -164,25 +211,12 @@ export default function WebPageBuilder() {
     setShowingProducts(false)
   }
 
-  const handleCopyCode = async () => {
+  const handleCopyCode = () => {
     const codeWithAssets = AssetRegistry.getCodeWithAssets(htmlCode)
-    try {
-      await navigator.clipboard.writeText(codeWithAssets)
-      setCopied(true)
-      // Reset copy state after 3 seconds
-      const timeoutId = setTimeout(() => {
-        setCopied(false)
-        // Re-initialize Alpine components after the copy state changes back
-        setTimeout(() => {
-          AssetRegistry.initializeInteractiveComponents()
-        }, 100)
-      }, 3000) // 3 seconds
-
-      // Cleanup timeout if component unmounts
-      return () => clearTimeout(timeoutId)
-    } catch (err) {
-      console.error("Failed to copy:", err)
-    }
+    navigator.clipboard.writeText(codeWithAssets).then(() => {
+      setCopiedCode(true)
+      setTimeout(() => setCopiedCode(false), 2000)
+    })
   }
 
   const handleShowProducts = () => {
@@ -192,32 +226,33 @@ export default function WebPageBuilder() {
   }
 
   return (
-    <div className="h-screen flex">
+    <div className="flex h-screen">
       {/* Component List Sidebar */}
-      <div className="w-80 bg-gray-50 border-r p-4 flex flex-col sidebar">
+      <div className="w-[20%] bg-gray-50 border-r p-4 flex flex-col h-full sidebar">
         <div className="flex items-center justify-between mb-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowSettingsDialog(true)}
+            className="flex items-center gap-2 bg-blue-50 hover:bg-blue-100 text-blue-700"
+          >
+            <SettingsIcon className="h-4 w-4" />
+            Algolia Settings
+          </Button>
           <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold">Components</h2>
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setIsMobileTutorialOpen(true)}
+              onClick={() => setShowMobileTutorial(true)}
               className="text-gray-500 hover:text-gray-700"
             >
               <Smartphone className="h-4 w-4" />
             </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setIsShowroomSettingsOpen(true)}
-            >
-              <Settings className="h-5 w-5" />
+            <Button onClick={() => setShowAddDialog(true)} size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
+              <Plus className="w-4 h-4 mr-1" />
+              Add
             </Button>
           </div>
-          <Button onClick={() => setIsAddDialogOpen(true)} size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
-            <Plus className="w-4 h-4 mr-1" />
-            Add
-          </Button>
         </div>
 
         {/* Draggable List */}
@@ -252,7 +287,7 @@ export default function WebPageBuilder() {
                               onClick={() => handleEditComponent(component)}
                               className="opacity-0 group-hover:opacity-100 h-6 w-6 p-0"
                             >
-                              <Settings className="w-3 h-3" />
+                              <SettingsIcon className="w-3 h-3" />
                             </Button>
                             <Button
                               size="sm"
@@ -275,9 +310,9 @@ export default function WebPageBuilder() {
         </div>
 
         {/* Preview Actions */}
-        <div className="flex items-center gap-2 mb-4">
-          <Button onClick={handleCopyCode} size="sm" className="bg-green-600 hover:bg-green-700 text-white">
-            {copied ? (
+        <div className="mt-4">
+          <Button onClick={handleCopyCode} size="sm" className="bg-green-600 hover:bg-green-700 text-white w-full">
+            {copiedCode ? (
               <>
                 <Check className="w-4 h-4 mr-1" />
                 Copied!
@@ -289,36 +324,22 @@ export default function WebPageBuilder() {
               </>
             )}
           </Button>
-          <Button onClick={handleShowProducts} size="sm" disabled={showingProducts}>
-            {showingProducts ? (
-              <>
-                <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                Showing Products
-              </>
-            ) : (
-              <>
-                <Eye className="w-4 h-4 mr-1" />
-                Show Products
-              </>
-            )}
-          </Button>
         </div>
       </div>
 
       {/* Preview Area */}
-      <div className="flex-1 bg-white overflow-auto">
+      <div className="w-[80%] bg-white overflow-auto h-full">
         <div className="min-h-full">
-          {components.map((component) => (
-            <div key={component.id} dangerouslySetInnerHTML={{ __html: component.html }} />
-          ))}
-          {components.length === 0 && (
+          {components.length > 0 ? (
+            <div id="preview" className="preview-container" />
+          ) : (
             <div className="text-center py-12 text-gray-500">
               <Plus className="w-12 h-12 mx-auto mb-4 opacity-50" />
               <p className="text-lg font-medium mb-2">Get Started with Your Page</p>
               <p className="mb-6">Start fresh by adding components from the sidebar, or paste your existing page code to edit it.</p>
               <Button 
                 onClick={() => {
-                  setIsAddDialogOpen(true)
+                  setShowAddDialog(true)
                   setActiveTab('custom')
                 }}
                 className="bg-blue-600 hover:bg-blue-700 text-white"
@@ -333,8 +354,8 @@ export default function WebPageBuilder() {
 
       {/* Add Component Dialog */}
       <AddComponentDialog
-        isOpen={isAddDialogOpen}
-        onClose={() => setIsAddDialogOpen(false)}
+        isOpen={showAddDialog}
+        onClose={() => setShowAddDialog(false)}
         onSelectComponent={handleAddComponent}
         onAddCustomComponent={handleAddCustomComponent}
         activeTab={activeTab}
@@ -355,13 +376,13 @@ export default function WebPageBuilder() {
       )}
 
       <MobileTutorialDialog
-        isOpen={isMobileTutorialOpen}
-        onClose={() => setIsMobileTutorialOpen(false)}
+        isOpen={showMobileTutorial}
+        onClose={() => setShowMobileTutorial(false)}
       />
 
       <ShowroomSettingsDialog
-        open={isShowroomSettingsOpen}
-        onOpenChange={setIsShowroomSettingsOpen}
+        isOpen={showSettingsDialog}
+        onClose={() => setShowSettingsDialog(false)}
       />
 
       <style jsx global>{`

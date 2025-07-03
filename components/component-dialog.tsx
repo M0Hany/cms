@@ -39,12 +39,12 @@ export function ComponentDialog({ component, isOpen, onClose, onSave, onSaveCode
 
   const handleSaveCode = () => {
     // Try to parse the component type and config from the HTML
-    const parsedComponents = parseComponents(htmlCode, true)
+    const parsedComponents = parseComponents(htmlCode)
     if (parsedComponents.length > 0) {
       const parsedComponent = parsedComponents[0]
       onSaveCode({ ...component, type: parsedComponent.type, config: parsedComponent.config }, htmlCode)
     } else {
-    onSaveCode(component, htmlCode)
+      onSaveCode(component, htmlCode)
     }
   }
 
@@ -568,23 +568,23 @@ export function ComponentDialog({ component, isOpen, onClose, onSave, onSaveCode
                   <div className="relative w-fit rounded-full border bg-muted p-1">
                     <div
                       className={`absolute transition-all duration-200 ${
-                        !config.isRTL ? "translate-x-0" : "translate-x-full"
+                        !config.direction || config.direction === "ltr" ? "translate-x-0" : "translate-x-full"
                       } top-1 left-1 h-8 w-[90px] rounded-full bg-background`}
                     />
                     <div className="relative flex">
                       <button
                         className={`relative z-10 h-8 w-[90px] rounded-full text-sm transition-colors ${
-                          !config.isRTL ? "text-foreground" : "text-muted-foreground"
+                          !config.direction || config.direction === "ltr" ? "text-foreground" : "text-muted-foreground"
                         }`}
-                        onClick={() => setConfig({ ...config, isRTL: false })}
+                        onClick={() => setConfig({ ...config, direction: "ltr" })}
                       >
                         LTR
                       </button>
                       <button
                         className={`relative z-10 h-8 w-[90px] rounded-full text-sm transition-colors ${
-                          config.isRTL ? "text-foreground" : "text-muted-foreground"
+                          config.direction === "rtl" ? "text-foreground" : "text-muted-foreground"
                         }`}
-                        onClick={() => setConfig({ ...config, isRTL: true })}
+                        onClick={() => setConfig({ ...config, direction: "rtl" })}
                       >
                         RTL
                       </button>

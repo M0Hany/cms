@@ -1,638 +1,325 @@
-import type { Component } from "@/types/component"
+import { ComponentRegistry } from "./component-registry"
+import { AssetRegistry } from "./asset-registry"
+import { PreviewComponentRegistry } from "./preview-component-registry"
+import { PreviewAssetRegistry } from "./preview-asset-registry"
+import { settingsModel } from "./settings-model"
+import type { Component as ComponentType } from "@/types/component"
 
-// Generate HTML with special component markers
-export function generateHTML(components: Component[]): string {
-  const baseAssets = `<!-- Base Assets -->
-<link rel="stylesheet" href="https://unpkg.com/@vtmn/css-button" />
-<link rel="stylesheet" href="https://unpkg.com/swiper/swiper-bundle.min.css" />
-<link rel="stylesheet" href="https://decathlon-egypt.github.io/Decathlon-Egypt/CMS%20Scripts%20&%20Styles/Banner%20carousel.css" />
-<link rel="stylesheet" href="https://decathlon-egypt.github.io/Decathlon-Egypt/CMS%20Scripts%20&%20Styles/4%20blocks.css" />
-<link rel="stylesheet" href="https://decathlon-egypt.github.io/Decathlon-Egypt/CMS%20Scripts%20&%20Styles/8%20icons.css" />
-<link rel="stylesheet" href="https://decathlon-egypt.github.io/Decathlon-Egypt/CMS%20Scripts%20&%20Styles/Showroom.css" />
-<link rel="stylesheet" href="https://decathlon-egypt.github.io/Decathlon-Egypt/CMS%20Scripts%20&%20Styles/Page%20stretch.css" />
-
-<script src="https://cdn.jsdelivr.net/npm/algoliasearch@4.5.1/dist/algoliasearch-lite.umd.js"></script>
-<script src="https://unpkg.com/@alpinejs/intersect@3.8.1/dist/cdn.min.js"></script>
-<script src="https://unpkg.com/alpinejs@3.8.1/dist/cdn.min.js" defer></script>
-<script src="https://unpkg.com/swiper/swiper-bundle.min.js"></script>
-<script src="https://decathlon-egypt.github.io/Decathlon-Egypt/CMS%20Scripts%20&%20Styles/Banner%20carousel.js"></script>
-
-<script>
-const getCookie = (name) => {
-  const value = "; " + document.cookie;
-  const parts = value.split("; " + name + "=");
-  if (parts.length === 2) return parts.pop().split(";").shift();
-  return null;
-};
-const algoliaDetails = {
-  app_id: getCookie("showroom_app_id") || 'TR53CBEI82',
-  api_search_key: getCookie("showroom_api_search_key") || "98ef65e220d8d74a2dfac7a67f1dba11",
-  index_name: getCookie("showroom_index_name") || "prod_en",
-};
-
-function handleLoadingSliders() {
-  const loadingProducts = document.getElementsByClassName("loading-products");
-  const loadingProductsArr = [...loadingProducts];
-  loadingProductsArr.forEach((e) => {
-    e.remove();
-  });
+export interface Component {
+  id: string
+  type: string
+  displayName?: string
+  config: any
+  html: string
 }
 
-function updateImageUrl(url) {
-  if (!url) return '';
-  const newParams = "format=auto&quality=40&f=400x0";
-  if (url.indexOf("?") > -1) {
-    return url + "&" + newParams;
-  }
-  return url + "?" + newParams;
-}
+export function generateHTML(components: Component[], isPreview: boolean = false): string {
+  const currentSettings = settingsModel.getSettings()
 
-document.addEventListener("alpine:init", () => {
-  Alpine.data("products", () => ({
-    products: [],
-    gridStyle: "",
-    init() {
-      // Initialize with empty state
-      this.products = [];
-      this.gridStyle = "";
-    },
-    getProductsFromCategory(prodCount, categoryNumber, priorityObjectIDs = []) {
-      try {
-        const clientAlg = algoliasearch(algoliaDetails.app_id, algoliaDetails.api_search_key);
-        const indexAlg = clientAlg.initIndex(algoliaDetails.index_name);
-        const objectIDFilters = priorityObjectIDs.map((id) => \`objectID:\${id}\`).join(" OR ");
-
-        indexAlg.search("", {
-          filters: objectIDFilters.length ? objectIDFilters : \`category = \${categoryNumber}\`,
-          analytics: false,
-        }).then(({ hits: priorityHits }) => {
-          if (priorityObjectIDs.length) {
-            indexAlg.search("", {
-              filters: \`category = \${categoryNumber} \`,
-              analytics: false,
-            }).then(({ hits: categoryHits }) => {
-              const uniqueCategoryHits = categoryHits.filter(
-                (hit) => !priorityObjectIDs.includes(hit.objectID)
-              );
-
-              const combinedResults = [...priorityHits, ...uniqueCategoryHits].slice(0, prodCount);
-              this.products = combinedResults || [];
-              handleLoadingSliders();
-            }).catch(err => {
-              console.error("Error fetching category hits:", err);
-              this.products = [];
-            });
-          } else {
-            const filteredResultsByCategory = priorityHits
-              .sort((a, b) => b.popularity - a.popularity)
-              .slice(0, prodCount);
-
-            this.products = filteredResultsByCategory || [];
-            handleLoadingSliders();
-          }
-        }).catch(err => {
-          console.error("Error fetching priority hits:", err);
-          this.products = [];
-        });
-      } catch (err) {
-        console.error("Error in getProductsFromCategory:", err);
-        this.products = [];
-      }
-    },
-    getDiscountedProductsFromCategory(prodCount, categoryNumber, priorityObjectIDs = []) {
-      try {
-        const clientAlg = algoliasearch(algoliaDetails.app_id, algoliaDetails.api_search_key);
-        const indexAlg = clientAlg.initIndex(algoliaDetails.index_name);
-        const objectIDFilters = priorityObjectIDs.map((id) => \`objectID:\${id}\`).join(" OR ");
-
-        indexAlg.search("", {
-          filters: objectIDFilters.length ? objectIDFilters : \`category = \${categoryNumber} AND percentoff > 0\`,
-          analytics: false,
-        }).then(({ hits: priorityHits }) => {
-          if (priorityObjectIDs.length) {
-            indexAlg.search("", {
-              filters: \`category = \${categoryNumber} AND percentoff > 0\`,
-              analytics: false,
-            }).then(({ hits: categoryHits }) => {
-              const uniqueCategoryHits = categoryHits.filter(
-                (hit) => !priorityObjectIDs.includes(hit.objectID)
-              );
-
-              const combinedResults = [...priorityHits, ...uniqueCategoryHits].slice(0, prodCount);
-              this.products = combinedResults || [];
-              handleLoadingSliders();
-            }).catch(err => {
-              console.error("Error fetching discounted category hits:", err);
-              this.products = [];
-            });
-          } else {
-            const filteredResultsByCategory = priorityHits
-              .sort((a, b) => b.popularity - a.popularity)
-              .slice(0, prodCount);
-
-            this.products = filteredResultsByCategory || [];
-            handleLoadingSliders();
-          }
-        }).catch(err => {
-          console.error("Error fetching discounted priority hits:", err);
-          this.products = [];
-        });
-      } catch (err) {
-        console.error("Error in getDiscountedProductsFromCategory:", err);
-        this.products = [];
-      }
-    },
-    getProductsManual(productsArr) {
-      try {
-        const clientAlg = algoliasearch(algoliaDetails.app_id, algoliaDetails.api_search_key);
-        const indexAlg = clientAlg.initIndex(algoliaDetails.index_name);
-        const filters = productsArr.map((id) => \`objectID:\${id}\`).join(" OR ");
-
-        indexAlg.search("", {
-          filters: filters,
-          analytics: false,
-        }).then(({ hits }) => {
-          handleLoadingSliders();
-          const orderedHits = productsArr.map((id) => hits.find((hit) => hit.objectID === id));
-          this.products = orderedHits.filter(Boolean) || [];
-          this.updateGridStyle();
-        }).catch((err) => {
-          console.error("Error in getProductsManual:", err);
-          this.products = [];
-        });
-      } catch (err) {
-        console.error("Error in getProductsManual:", err);
-        this.products = [];
-      }
-    },
-    updateGridStyle() {
-      const columns = this.products?.length || 0;
-      this.gridStyle = \`grid-template-columns: repeat(\${columns}, 1fr);\`;
-    },
-  }));
-});
-</script>
-<!-- End Base Assets -->`
-
-  const componentsHtml = components
-    .map((component) => {
-      return `<!-- COMPONENT_START:${component.id}:${component.type} -->
-${component.html}
-<!-- COMPONENT_END:${component.id} -->`
-    })
-    .join("\n\n")
-
-  return componentsHtml + "\n\n" + baseAssets
-}
-
-// Component type to display name mapping
-const componentDisplayNames: Record<string, string> = {
-  'swiper': 'Banner Carousel',
-  'products-showroom': 'Products Showroom',
-  'four-categories': 'Four Blocks',
-  'eight-icons': 'Eight Icons',
-  'style': 'Style',
-  'script': 'Script',
-  'custom': 'Custom'
-}
-
-// Advanced HTML parser that detects component boundaries and multiple components
-export function parseComponents(html: string, isCustomCode = false): Component[] {
-  const components: Component[] = []
-
-  if (!html.trim()) {
-    return components
+  if (!currentSettings) {
+    return "<!-- Error: No settings found -->"
   }
 
-  // Get list of pre-registered asset URLs and inline scripts
-  const preRegisteredAssets = [
-    "https://cdn.jsdelivr.net/npm/algoliasearch@4.5.1/dist/algoliasearch-lite.umd.js",
-    "https://unpkg.com/@alpinejs/intersect@3.8.1/dist/cdn.min.js",
-    "https://unpkg.com/alpinejs@3.8.1/dist/cdn.min.js",
-    "https://unpkg.com/swiper/swiper-bundle.min.js",
-    "https://decathlon-egypt.github.io/Decathlon-Egypt/CMS%20Scripts%20&%20Styles/Banner%20carousel.js",
-    "https://decathlon-egypt.github.io/Decathlon-Egypt/CMS%20Scripts%20&%20Styles/Banner%20carousel.css",
-    "https://unpkg.com/@vtmn/css-button",
-    "https://unpkg.com/swiper/swiper-bundle.min.css",
-    "https://decathlon-egypt.github.io/Decathlon-Egypt/CMS%20Scripts%20&%20Styles/4%20blocks.css",
-    "https://decathlon-egypt.github.io/Decathlon-Egypt/CMS%20Scripts%20&%20Styles/8%20icons.css",
-    "https://decathlon-egypt.github.io/Decathlon-Egypt/CMS%20Scripts%20&%20Styles/Showroom.css",
-    "https://decathlon-egypt.github.io/Decathlon-Egypt/CMS%20Scripts%20&%20Styles/Page%20stretch.css"
-  ]
+  const registry = isPreview ? PreviewComponentRegistry : ComponentRegistry
+  const assetRegistry = isPreview ? PreviewAssetRegistry : AssetRegistry
 
-  // Pre-registered inline scripts content (normalized)
-  const preRegisteredInlineScripts = [
-    normalizeScript(`document.addEventListener("DOMContentLoaded", function() {
-      const tracks = document.querySelectorAll(".showroom-products-track");
-      const leftShowroomArrows = document.querySelectorAll(".left_showroom_arrow");
-      const rightShowroomArrows = document.querySelectorAll(".right_showroom_arrow");
-      const trackTranslations = Array(tracks.length).fill(0);`),
-    normalizeScript(`
-    const getCookie = (name) => {
-      const value = "; " + document.cookie;
-      const parts = value.split("; " + name + "=");
-      if (parts.length === 2) return parts.pop().split(";").shift();
-      return null;
-    };
-    const algoliaDetails = {
-      app_id: getCookie("showroom_app_id") || 'TR53CBEI82',
-      api_search_key: getCookie("showroom_api_search_key") || "98ef65e220d8d74a2dfac7a67f1dba11",
-      index_name: getCookie("showroom_index_name") || "prod_en",
-    };`)
-  ]
-
-  if (isCustomCode) {
-    // Extract and handle external assets first
-    const styleRegex = /<link[^>]*href=["']([^"']+)["'][^>]*>/g
-    const scriptRegex = /<script[^>]*src=["']([^"']+)["'][^>]*>/g
-    let match
-
-    // Process external styles
-    while ((match = styleRegex.exec(html)) !== null) {
-      const styleUrl = match[1]
-      if (!preRegisteredAssets.includes(styleUrl)) {
-        components.push({
-          id: `style-${Date.now()}-${Math.random()}`,
-          type: "style",
-          displayName: componentDisplayNames["style"],
-          config: { url: styleUrl },
-          html: match[0].trim()
-        })
-      }
+  const htmlParts = components.map((component) => {
+    const template = registry.getTemplate(component.type)
+    if (!template) {
+      return `<!-- Unknown component type: ${component.type} -->`
     }
 
-    // Process external scripts
-    while ((match = scriptRegex.exec(html)) !== null) {
-      const scriptUrl = match[1]
-      if (!preRegisteredAssets.includes(scriptUrl)) {
-        components.push({
-          id: `script-${Date.now()}-${Math.random()}`,
-          type: "script",
-          displayName: componentDisplayNames["script"],
-          config: { url: scriptUrl },
-          html: match[0].trim()
-        })
+    if (component.type === "products-showroom") {
+      const html = template.generateHTML(component.config)
+
+      const newConfig = {
+        ...component.config,
+        currency: currentSettings.currency
       }
+
+      return `<!-- COMPONENT_START ${component.id} -->\n${html}\n<!-- COMPONENT_END ${component.id} -->`
     }
 
-    // Process inline scripts
-    const inlineScriptRegex = /<script[^>]*>([\s\S]*?)<\/script>/g
-    while ((match = inlineScriptRegex.exec(html)) !== null) {
-      const scriptContent = match[1].trim()
-      if (scriptContent && !match[0].includes('src=')) {
-        const normalizedScript = normalizeScript(scriptContent)
-        if (!preRegisteredInlineScripts.some(s => normalizedScript.includes(s))) {
-          components.push({
-            id: `script-${Date.now()}-${Math.random()}`,
-            type: "script",
-            displayName: componentDisplayNames["script"],
-            config: { inline: true },
-            html: match[0].trim()
-          })
+    const html = template.generateHTML(component.config)
+    return `<!-- COMPONENT_START ${component.id} -->\n${html}\n<!-- COMPONENT_END ${component.id} -->`
+  })
+
+  const combinedHTML = htmlParts.join("\n\n")
+  
+  if (isPreview) {
+    assetRegistry.injectDefaultAssets()
+    return combinedHTML
+  }
+  
+  return combinedHTML
+}
+
+function detectComponentType(html: string): string {
+  if (html.includes('class="swiper mySwiper"') || 
+      (html.includes('class="swiper-slide"') && html.includes('picture'))) {
+    return "swiper"
+  }
+  if (html.includes('class="four_categories_wrapper"') || 
+      (html.includes('four_categories_box') && html.includes('four_categories_category_wrapper'))) {
+    return "four-categories"
+  }
+  if (html.includes('class="icons-wrapper"')) {
+    return "eight-icons"
+  }
+  if (html.includes('showroom-products-wrapper') || 
+      html.includes('showroom-heading') || 
+      html.includes('showroom-banner-wrapper')) {
+    return "products-showroom"
+  }
+  return "Custom"
+}
+
+function extractComponentConfig(html: string, type: string): any {
+  const config: any = {}
+  
+  switch (type) {
+    case "swiper":
+      if (!html.includes('class="swiper mySwiper"')) {
+        const linkMatch = html.match(/<a href="([^"]*)"[^>]*>/);
+        const sourceMatches = html.match(/<source[^>]*media="[^"]*"[^>]*srcset="([^"]*)"[^>]*>/g);
+        const imgMatch = html.match(/<img[^>]*alt="([^"]*)"[^>]*src="([^"]*)"[^>]*>/);
+
+        if (linkMatch && sourceMatches && imgMatch) {
+          const desktopSource = sourceMatches.find(s => s.includes('min-width: 768px'));
+          const mobileSource = sourceMatches.find(s => s.includes('max-width: 767px'));
+
+          const desktopImage = desktopSource?.match(/srcset="([^"]*)"/)?.[1] || imgMatch[2];
+          const mobileImage = mobileSource?.match(/srcset="([^"]*)"/)?.[1] || desktopImage;
+
+          config.slides = [{
+            linkUrl: linkMatch[1] || "",
+            desktopImage: desktopImage || "",
+            mobileImage: mobileImage || "",
+            altText: imgMatch[1] || ""
+          }];
+        } else {
+          config.slides = [];
         }
+      } else {
+        const slideMatches = html.matchAll(/<div class="swiper-slide">[\s\S]*?href="([^"]*)"[\s\S]*?srcset="([^"]*)"[\s\S]*?srcset="([^"]*)"[\s\S]*?src="([^"]*)"[\s\S]*?alt="([^"]*)"[\s\S]*?<\/div>/g)
+        const slides = Array.from(slideMatches).map(match => ({
+          linkUrl: match[1] || "",
+          desktopImage: match[2] || match[4] || "",
+          mobileImage: match[3] || "",
+          altText: match[5] || ""
+        }))
+        config.slides = slides
       }
-    }
+      break
 
-    // Process inline styles
-    const inlineStyleRegex = /<style[^>]*>([\s\S]*?)<\/style>/g
-    while ((match = inlineStyleRegex.exec(html)) !== null) {
-      const styleContent = match[1].trim()
-      if (styleContent) {
-        components.push({
-          id: `style-${Date.now()}-${Math.random()}`,
-          type: "style",
-          displayName: componentDisplayNames["style"],
-          config: { inline: true },
-          html: match[0].trim()
+    case "four-categories":
+      const titleMatch = html.match(/<h2[^>]*>([\s\S]*?)<\/h2>/)
+      config.title = titleMatch ? titleMatch[1].trim() : ""
+      
+      const bgColorMatch = html.match(/background-color:\s*([^"'\s;]*)/)
+      config.backgroundColor = bgColorMatch ? bgColorMatch[1] : ""
+      
+      const categoryWrappers = html.match(/<div class="four_categories_category_wrapper">[\s\S]*?<\/div>\s*<\/div>/g) || []
+      config.categories = categoryWrappers.map(wrapper => {
+        const linkMatch = wrapper.match(/href="([^"]*)"/)
+        const imgMatch = wrapper.match(/<img[^>]*alt="([^"]*)"[^>]*src="([^"]*)"/)
+        
+        return {
+          linkUrl: linkMatch ? linkMatch[1] : "",
+          imageUrl: imgMatch ? imgMatch[2] : "",
+          altText: imgMatch ? imgMatch[1] : ""
+        }
+      })
+
+      while (config.categories.length < 4) {
+        config.categories.push({
+          linkUrl: "",
+          imageUrl: "",
+          altText: ""
         })
       }
-    }
+      break
 
-    // Remove all style and script tags from the HTML
-    html = html
-      .replace(/<link[^>]*>/g, '')
-      .replace(/<script[^>]*>[\s\S]*?<\/script>/g, '')
-      .replace(/<style[^>]*>[\s\S]*?<\/style>/g, '')
-      .trim()
+    case "eight-icons":
+      const iconsTitleMatch = html.match(/<h2[^>]*>([\s\S]*?)<\/h2>/)
+      config.title = iconsTitleMatch ? iconsTitleMatch[1].trim() : ""
+      
+      const iconWrappers = html.match(/<a[^>]*class="icon-wrapper"[\s\S]*?<\/a>/g) || []
+      config.icons = iconWrappers.map(wrapper => {
+        const linkMatch = wrapper.match(/href="([^"]*)"/)
+        const imgMatch = wrapper.match(/<img[^>]*alt="([^"]*)"[^>]*src="([^"]*)"/)
+        const subtitleMatch = wrapper.match(/<span>([^<]*)<\/span>/)
+        
+        return {
+          linkUrl: linkMatch ? linkMatch[1] : "",
+          imageUrl: imgMatch ? imgMatch[2] : "",
+          altText: imgMatch ? imgMatch[1] : "",
+          subtitle: subtitleMatch ? subtitleMatch[1] : ""
+        }
+      })
 
-    // Parse custom HTML code and detect multiple components
-    const detectedComponents = detectMultipleComponents(html)
-    detectedComponents.forEach((componentHtml, index) => {
-      // Try to detect component type from HTML structure
-      const type = detectComponentType(componentHtml)
-      let config = {}
+      while (config.icons.length < 8) {
+        config.icons.push({
+          linkUrl: "",
+          imageUrl: "",
+          altText: "",
+          subtitle: ""
+        })
+      }
+      break
 
-      // Parse config based on detected type
-      if (type === "swiper") {
-        config = parseSwiperConfig(componentHtml)
-      } else if (type === "four-categories") {
-        config = parseFourCategoriesConfig(componentHtml)
-      } else if (type === "eight-icons") {
-        config = parseEightIconsConfig(componentHtml)
-      } else if (type === "products-showroom") {
-        config = parseProductsShowroomConfig(componentHtml)
+    case "products-showroom":
+      config.mode = html.includes('showroom-heading') ? "title" : "image"
+
+      // Detect direction from container class
+      config.direction = html.includes('showroom-container-rtl') ? "rtl" : "ltr"
+
+      if (config.mode === "title") {
+        const titleMatch = html.match(/<h2[^>]*id="showroom-title"[^>]*>([\s\S]*?)<\/h2>/)
+        config.title = titleMatch ? titleMatch[1].trim() : ""
+      } else {
+        const bannerConfig: any = {}
+        
+        const bannerLinkMatch = html.match(/<a[^>]*href="([^"]*)"[^>]*>[\s\S]*?showroom-banner-wrapper/);
+        bannerConfig.linkUrl = bannerLinkMatch ? bannerLinkMatch[1] : ""
+        
+        const desktopImageMatch = html.match(/showroom-desktop-banner[\s\S]*?<img[^>]*alt="([^"]*)"[^>]*src="([^"]*)"[^>]*class="showroom-banner-image"/);
+        if (desktopImageMatch) {
+          bannerConfig.altText = desktopImageMatch[1]
+          bannerConfig.desktopImage = desktopImageMatch[2]
+        }
+        
+        const mobileImageMatch = html.match(/showroom-mobile-banner[\s\S]*?<img[^>]*alt="[^"]*"[^>]*src="([^"]*)"[^>]*class="showroom-banner-image"/);
+        bannerConfig.mobileImage = mobileImageMatch ? mobileImageMatch[1] : bannerConfig.desktopImage
+        
+        config.bannerConfig = bannerConfig
       }
 
-      const component: Component = {
-        id: `${type}-${Date.now()}-${index}`,
-        type,
-        displayName: componentDisplayNames[type] || componentDisplayNames["custom"],
-        config,
-        html: componentHtml.trim(),
+      const intersectMatch = html.match(/x-intersect[^"]*"[^"]*getProductsFromCategory\((\d+),\s*(\d+),\s*\[(.*?)\]\)/);
+      if (intersectMatch) {
+        config.categoryNumber = intersectMatch[2]
+        config.objectIds = intersectMatch[3] ? intersectMatch[3].split(',')
+          .map(id => id.trim())
+          .filter(id => id)
+          .map(id => id.replace(/['"]/g, ''))
+          .join(',') : ""
       }
-      components.push(component)
-    })
-    return components
+
+      config.sale = html.includes('class="old-price"') ? "yes" : "no"
+      break
+
+    case "Custom":
+      config.html = html
+      break
   }
+  
+  return config
+}
 
-  // Parse existing components with special markers
-  const componentRegex = /<!-- COMPONENT_START:([^:]+):([^:]+) -->\s*([\s\S]*?)\s*<!-- COMPONENT_END:\1 -->/g
+export function parseComponents(html: string): ComponentType[] {
+  const components: ComponentType[] = []
+  
+  html = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+  html = html.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+  html = html.replace(/<link[^>]*rel="stylesheet"[^>]*>/gi, '')
+  
+  // First try to parse components with special comments
+  const commentRegex = /<!-- COMPONENT_START (.*?) -->([\s\S]*?)<!-- COMPONENT_END \1 -->/g
   let match
+  let remainingHtml = html
+  const processedRanges: [number, number][] = []
 
-  while ((match = componentRegex.exec(html)) !== null) {
-    const [, id, type, componentHtml] = match
-
-    // Try to parse config from known component types
-    let config = {}
-    if (type === "swiper") {
-      config = parseSwiperConfig(componentHtml)
-    } else if (type === "four-categories") {
-      config = parseFourCategoriesConfig(componentHtml)
-    } else if (type === "eight-icons") {
-      config = parseEightIconsConfig(componentHtml)
-    } else if (type === "products-showroom") {
-      config = parseProductsShowroomConfig(componentHtml)
-    }
-
+  while ((match = commentRegex.exec(html)) !== null) {
+    const id = match[1]
+    const componentHtml = match[2].trim()
+    
+    const type = detectComponentType(componentHtml)
+    const config = extractComponentConfig(componentHtml, type)
+    
     components.push({
       id,
       type,
-      displayName: componentDisplayNames[type] || componentDisplayNames["custom"],
       config,
-      html: componentHtml.trim(),
+      html: componentHtml
+    })
+
+    processedRanges.push([match.index, match.index + match[0].length])
+  }
+
+  // If no components found with comments, try parsing the entire HTML
+  if (components.length === 0) {
+    const type = detectComponentType(html)
+    const config = extractComponentConfig(html, type)
+    
+    components.push({
+      id: `${type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      type,
+      config,
+      html: html.trim()
     })
   }
+
+  processedRanges.sort((a, b) => b[0] - a[0]).forEach(([start, end]) => {
+    remainingHtml = remainingHtml.slice(0, start) + remainingHtml.slice(end)
+  })
+
+  let depth = 0
+  let currentStart = -1
+  const componentRanges: { start: number, end: number }[] = []
+  
+  const tagRegex = /<(\/)?([a-zA-Z][a-zA-Z0-9-_]*)[^>]*?(\/)?>/g
+  while ((match = tagRegex.exec(remainingHtml)) !== null) {
+    const isClosingTag = match[1] === '/'
+    const isSelfClosingTag = match[3] === '/'
+    const tag = match[2].toLowerCase()
+    
+    if (!isSelfClosingTag) {
+      if (!isClosingTag) {
+        depth++
+        if (depth === 1) {
+          currentStart = match.index
+        }
+      } else {
+        depth--
+        if (depth === 0 && currentStart !== -1) {
+          componentRanges.push({
+            start: currentStart,
+            end: match.index + match[0].length
+          })
+          currentStart = -1
+        }
+      }
+    }
+  }
+
+  componentRanges.forEach(({ start, end }) => {
+    const componentHtml = remainingHtml.slice(start, end).trim()
+    
+    const cleanedHtml = cleanHtml(componentHtml)
+    const type = detectComponentType(cleanedHtml)
+    const config = extractComponentConfig(cleanedHtml, type)
+    
+    components.push({
+      id: `${type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      type,
+      config,
+      html: cleanedHtml
+    })
+  })
 
   return components
 }
 
-// Helper function to normalize script content for comparison
-function normalizeScript(script: string): string {
-  return script
-    .replace(/\s+/g, ' ')  // Normalize whitespace
-    .replace(/[\n\r]/g, '') // Remove newlines
-    .trim()
-}
-
-// Detect component type from HTML structure
-function detectComponentType(html: string): string {
-  // Swiper Carousel detection
-  if (html.includes('class="swiper mySwiper"') || html.includes('class="swiper-slide"')) {
-    return "swiper"
-  }
+function cleanHtml(html: string): string {
+  html = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+  html = html.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+  html = html.replace(/<link[^>]*rel="stylesheet"[^>]*>/gi, '')
+  html = html.replace(/\s+style="[^"]*"/g, '')
+  html = html.replace(/\s+x-[^=\s>]+(="[^"]*")?/g, '')
+  html = html.replace(/\s+(async|defer)/g, '')
+  html = html.replace(/\s+class=""/g, '')
+  html = html.replace(/\s+data-[^=\s>]+(="[^"]*")?/g, '')
+  html = html.replace(/\s+aria-[^=\s>]+(="[^"]*")?/g, '')
   
-  // Four Categories detection
-  if (html.includes('class="four_categories_wrapper"') || html.includes('class="four_categories_category_wrapper"')) {
-    return "four-categories"
-  }
-  
-  // Eight Icons detection
-  if (html.includes('class="icons-wrapper"') || html.includes('class="icon-wrapper"')) {
-    return "eight-icons"
-  }
-  
-  // Products Showroom detection (both title and image modes)
-  if (
-    html.includes('class="showroom-container"') || 
-    html.includes('id="showroom-title"') ||
-    html.includes('class="showroom-banner-wrapper"') ||
-    (html.includes('class="component-container"') && html.includes('x-data="products"'))
-  ) {
-    return "products-showroom"
-  }
-  
-  return "custom"
+  return html.trim()
 }
-
-// Detect multiple components in custom HTML by tracking tag nesting levels
-function detectMultipleComponents(html: string): string[] {
-  const components: string[] = []
-  const tagRegex = /<\/?([a-zA-Z][a-zA-Z0-9]*)\b[^>]*>/g
-
-  let currentComponent = ""
-  let nestingLevel = 0
-  let lastIndex = 0
-  let match
-
-  while ((match = tagRegex.exec(html)) !== null) {
-    const [fullMatch, tagName] = match
-    const isClosingTag = fullMatch.startsWith("</")
-    const isSelfClosing =
-      fullMatch.endsWith("/>") || ["img", "br", "hr", "input", "meta", "link"].includes(tagName.toLowerCase())
-
-    // Add content before this tag
-    currentComponent += html.slice(lastIndex, match.index) + fullMatch
-    lastIndex = tagRegex.lastIndex
-
-    if (!isSelfClosing) {
-      if (isClosingTag) {
-        nestingLevel--
-      } else {
-        nestingLevel++
-      }
-    }
-
-    // When we're back to level 0, we've completed a component
-    if (nestingLevel === 0 && currentComponent.trim()) {
-      components.push(currentComponent.trim())
-      currentComponent = ""
-    }
-  }
-
-  // Add any remaining content
-  if (lastIndex < html.length) {
-    currentComponent += html.slice(lastIndex)
-  }
-
-  if (currentComponent.trim()) {
-    components.push(currentComponent.trim())
-  }
-
-  return components.filter((comp) => comp.length > 0)
-}
-
-// Parse configuration from existing Swiper HTML
-function parseSwiperConfig(html: string): any {
-  const slides: any[] = []
-  const slideRegex =
-    /<div class="swiper-slide">\s*<a href="([^"]*)"[\s\S]*?<img[^>]*src="([^"]*)"[^>]*alt="([^"]*)"[\s\S]*?<\/a>\s*<\/div>/gi
-
-  let slideMatch
-  while ((slideMatch = slideRegex.exec(html)) !== null) {
-    const slideHtml = slideMatch[0]
-    const mobileImageMatch = slideHtml.match(/<source[^>]*max-width[^>]*srcset="([^"]*)"/i)
-
-    slides.push({
-      linkUrl: slideMatch[1] || "",
-      desktopImage: slideMatch[2] || "",
-      mobileImage: mobileImageMatch ? mobileImageMatch[1] : slideMatch[2] || "",
-      altText: slideMatch[3] || "",
-    })
-  }
-
-  return { slides: slides.length > 0 ? slides : [{ linkUrl: "", desktopImage: "", mobileImage: "", altText: "" }] }
-}
-
-// Parse configuration from existing Four Categories HTML
-function parseFourCategoriesConfig(html: string): any {
-  const titleMatch = html.match(/<h2 class="four_categories_title">(.*?)<\/h2>/i)
-  const backgroundColorMatch = html.match(/style="background-color:([^;"]*);?"/i)
-
-  const categories: any[] = []
-  const categoryRegex =
-    /<div class="four_categories_category_wrapper">[\s\S]*?<a href="([^"]*)"[\s\S]*?<img src="([^"]*)" alt="([^"]*)"[\s\S]*?<\/div>/gi
-
-  let categoryMatch
-  while ((categoryMatch = categoryRegex.exec(html)) !== null) {
-    categories.push({
-      linkUrl: categoryMatch[1] || "",
-      imageUrl: categoryMatch[2] || "",
-      altText: categoryMatch[3] || "",
-    })
-  }
-
-  // Ensure we have exactly 4 categories
-  while (categories.length < 4) {
-    categories.push({ linkUrl: "", imageUrl: "", altText: "" })
-  }
-
-  return {
-    title: titleMatch ? titleMatch[1] : "",
-    backgroundColor: backgroundColorMatch ? backgroundColorMatch[1].trim() : "",
-    categories: categories.slice(0, 4),
-  }
-}
-
-// Parse configuration from existing Eight Icons HTML
-function parseEightIconsConfig(html: string): any {
-  const titleMatch = html.match(/<h2 class="icons-title">(.*?)<\/h2>/i)
-
-  const icons: any[] = []
-  const iconRegex =
-    /<a href="([^"]*)" class="icon-wrapper">[\s\S]*?<img[^>]*alt="([^"]*)"[^>]*src="([^"]*)"[\s\S]*?<span>(.*?)<\/span>[\s\S]*?<\/a>/gi
-
-  let iconMatch
-  while ((iconMatch = iconRegex.exec(html)) !== null) {
-    icons.push({
-      linkUrl: iconMatch[1] || "",
-      altText: iconMatch[2] || "",
-      imageUrl: iconMatch[3] || "",
-      subtitle: iconMatch[4] || "",
-    })
-  }
-
-  // Ensure we have exactly 8 icons
-  while (icons.length < 8) {
-    icons.push({ linkUrl: "", imageUrl: "", altText: "", subtitle: "" })
-  }
-
-  return {
-    title: titleMatch ? titleMatch[1] : "",
-    icons: icons.slice(0, 8),
-  }
-}
-
-// Parse configuration from existing Products Showroom HTML
-function parseProductsShowroomConfig(html: string): any {
-  const titleMatch = html.match(/<h2 id="showroom-title">(.*?)<\/h2>/i)
-
-  // Extract function call to determine configuration
-  const functionMatch = html.match(/x-intersect\.once\.margin\.300px="([^"]*)"/)
-  let categoryNumber = ""
-  let objectIds = ""
-  let sale = "no"
-
-  if (functionMatch) {
-    const functionCall = functionMatch[1]
-
-    // Check if it's a category-based call
-    const categoryRegex = /get(?:Discounted)?ProductsFromCategory\s*\(\s*10\s*,\s*(\d+)\s*,\s*\[(.*?)\]\s*\)/i
-    const manualRegex = /getProductsManual\s*\(\s*\[(.*?)\]\s*\)/i
-
-    const categoryMatch = functionCall.match(categoryRegex)
-
-    if (categoryMatch) {
-      categoryNumber = categoryMatch[1]
-      objectIds = categoryMatch[2].replace(/'/g, "").replace(/\s/g, "")
-      sale = functionCall.includes("getDiscountedProductsFromCategory") ? "yes" : "no"
-    } else {
-      // Check if it's a manual products call
-      const manualMatch = functionCall.match(manualRegex)
-      if (manualMatch) {
-        objectIds = manualMatch[1].replace(/'/g, "").replace(/\s/g, "")
-      }
-    }
-  }
-
-  return {
-    title: titleMatch ? titleMatch[1] : "",
-    categoryNumber,
-    objectIds,
-    sale,
-  }
-}
-
-export const generateProductsShowroomHTML = (config: any) => {
-  const {
-    mode = 'title',
-    title = '',
-    bannerConfig,
-    categoryNumber = '',
-    objectIds = '',
-    sale = 'no',
-    isRTL = false
-  } = config;
-
-  const showroomContainerClass = mode === 'image' && isRTL ? 'showroom-container showroom-container-rtl' : 'showroom-container';
-
-  if (mode === 'title') {
-    return `
-      <div class="component-container">
-        <div class="showroom-container">
-          <div class="showroom-header">
-            <h2>${title}</h2>
-          </div>
-          <div class="showroom-content">
-            <div x-data="{ copied: false }" class="show-products-button">
-              <button @click="copied = true; setTimeout(() => copied = false, 20000)" x-text="copied ? 'Copied!' : 'Show Products'"></button>
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
-  }
-
-  // Image mode
-  const { desktopImage = '', mobileImage = '', altText = '', linkUrl = '' } = bannerConfig || {};
-  
-  return `
-    <div class="component-container">
-      <div class="${showroomContainerClass}">
-        <div class="showroom-banner">
-          <a href="${linkUrl}" class="banner-link">
-            <picture>
-              <source media="(min-width: 768px)" srcset="${desktopImage}">
-              <source media="(max-width: 767px)" srcset="${mobileImage}">
-              <img src="${desktopImage}" alt="${altText}" class="banner-image">
-            </picture>
-          </a>
-        </div>
-        <div class="showroom-content">
-          <div x-data="{ copied: false }" class="show-products-button">
-            <button @click="copied = true; setTimeout(() => copied = false, 20000)" x-text="copied ? 'Copied!' : 'Show Products'"></button>
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-};

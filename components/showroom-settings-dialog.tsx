@@ -7,16 +7,16 @@ import { Button } from "./ui/button";
 import Cookies from "js-cookie";
 
 interface ShowroomSettingsDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  isOpen: boolean;
+  onClose: () => void;
 }
 
 const COOKIE_EXPIRY = 365; // days
 const COOKIE_PREFIX = "showroom_";
 
 export function ShowroomSettingsDialog({
-  open,
-  onOpenChange,
+  isOpen,
+  onClose,
 }: ShowroomSettingsDialogProps) {
   const [settings, setSettings] = useState({
     app_id: "TR53CBEI82",
@@ -46,8 +46,13 @@ export function ShowroomSettingsDialog({
     window.location.reload();
   };
 
+  // Log settings changes
+  const handleSettingChange = (key: string, value: string) => {
+    setSettings((prev) => ({ ...prev, [key]: value }));
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Showroom Settings</DialogTitle>
@@ -58,9 +63,7 @@ export function ShowroomSettingsDialog({
             <Input
               id="app_id"
               value={settings.app_id}
-              onChange={(e) =>
-                setSettings((prev) => ({ ...prev, app_id: e.target.value }))
-              }
+              onChange={(e) => handleSettingChange("app_id", e.target.value)}
             />
           </div>
           <div className="grid gap-2">
@@ -68,9 +71,7 @@ export function ShowroomSettingsDialog({
             <Input
               id="api_search_key"
               value={settings.api_search_key}
-              onChange={(e) =>
-                setSettings((prev) => ({ ...prev, api_search_key: e.target.value }))
-              }
+              onChange={(e) => handleSettingChange("api_search_key", e.target.value)}
             />
           </div>
           <div className="grid gap-2">
@@ -78,9 +79,7 @@ export function ShowroomSettingsDialog({
             <Input
               id="index_name"
               value={settings.index_name}
-              onChange={(e) =>
-                setSettings((prev) => ({ ...prev, index_name: e.target.value }))
-              }
+              onChange={(e) => handleSettingChange("index_name", e.target.value)}
             />
           </div>
           <div className="grid gap-2">
@@ -88,9 +87,7 @@ export function ShowroomSettingsDialog({
             <Input
               id="currency"
               value={settings.currency}
-              onChange={(e) =>
-                setSettings((prev) => ({ ...prev, currency: e.target.value }))
-              }
+              onChange={(e) => handleSettingChange("currency", e.target.value)}
             />
           </div>
           <Button onClick={handleSave}>Save Settings</Button>

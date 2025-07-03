@@ -1,3 +1,5 @@
+import { settingsModel } from "./settings-model"
+
 export interface Asset {
   type: "css" | "js"
   url: string
@@ -322,7 +324,7 @@ document.addEventListener("alpine:init", () => {
           this.updateGridStyle();
         })
           .catch((err) => {
-          console.error("Algolia Error:", err);
+          // Error handled silently
         });
       },
 
@@ -445,7 +447,7 @@ document.addEventListener("alpine:init", () => {
                 centeredSlides: true,
               })
             } catch (error) {
-              console.warn("Failed to initialize Swiper:", error)
+              // Error handled silently
             }
           })
         }, 50)
@@ -472,16 +474,31 @@ document.addEventListener("alpine:init", () => {
     const assetTags = assets
       .map((asset) => {
         if (asset.type === "css") {
-          return `<link rel="stylesheet" href="${asset.url}" id="${asset.id}" />`
+          return `<link rel="stylesheet" href="${asset.url}" />`
         } else if (asset.type === "js") {
-          return `<script src="${asset.url}" id="${asset.id}"></script>`
+          // Add defer attribute to Alpine.js scripts
+          const defer = asset.url.includes("alpinejs") ? ' defer' : ''
+          return `<script src="${asset.url}"${defer}></script>`
         }
         return ""
       })
       .join("\n")
 
-    // Return combined code
-    return `${assetTags}\n\n${htmlCode}`
+    // Get settings from settings model
+    const settings = settingsModel.getSettings()
+    
+    // Create the custom script with dynamic Algolia settings
+    const scriptWithSettings = this.customScript.replace(
+      /const algoliaDetails = {[^}]+};/,
+      `const algoliaDetails = {
+        app_id: '${settings?.app_id || ""}',
+        api_search_key: "${settings?.api_search_key || ""}",
+        index_name: "${settings?.index_name || ""}",
+      };`
+    )
+
+    // Return combined code with assets and custom script at the end
+    return `${htmlCode}\n\n${assetTags}\n\n${scriptWithSettings}`
   }
 
   clear(): void {
@@ -542,5 +559,6 @@ export const AssetRegistry = new AssetRegistryClass()
 declare global {
   interface Window {
     Swiper: any
+    settingsModel: typeof settingsModel
   }
 }
