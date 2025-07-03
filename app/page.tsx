@@ -228,7 +228,7 @@ export default function WebPageBuilder() {
   return (
     <div className="flex h-screen">
       {/* Component List Sidebar */}
-      <div className="w-[20%] bg-gray-50 border-r p-4 flex flex-col h-full sidebar">
+      <div className="w-[20%] bg-gray-50 border-r p-4 flex flex-col h-full sidebar md:block hidden">
         <div className="flex items-center justify-between mb-4">
           <Button
             variant="ghost"
@@ -328,7 +328,7 @@ export default function WebPageBuilder() {
       </div>
 
       {/* Preview Area */}
-      <div className="w-[80%] bg-white overflow-auto h-full">
+      <div className="md:w-[80%] w-full bg-white overflow-auto h-full">
         <div className="min-h-full">
           {components.length > 0 ? (
             <div id="preview" className="preview-container" />
