@@ -71,6 +71,27 @@ class PreviewAssetRegistryClass {
       url: "https://decathlon-egypt.github.io/Decathlon-Egypt/CMS%20Scripts%20&%20Styles/Page%20stretch.css",
       id: "page-stretch-css",
     },
+    // New informational styles
+    {
+      type: "css",
+      url: "https://decathlon-egypt.github.io/Decathlon-Egypt/CMS%20Scripts%20&%20Styles/dual%20section.css",
+      id: "dual-section-css",
+    },
+    {
+      type: "css",
+      url: "https://decathlon-egypt.github.io/Decathlon-Egypt/CMS%20Scripts%20&%20Styles/hero%20banner.css",
+      id: "hero-banner-css",
+    },
+    {
+      type: "css",
+      url: "https://decathlon-egypt.github.io/Decathlon-Egypt/CMS%20Scripts%20&%20Styles/info%20grid%20section.css",
+      id: "info-grid-section-css",
+    },
+    {
+      type: "css",
+      url: "https://decathlon-egypt.github.io/Decathlon-Egypt/CMS%20Scripts%20&%20Styles/faqs%20section.css",
+      id: "faqs-section-css",
+    },
   ]
 
   private customScript = `<script>
@@ -293,9 +314,10 @@ document.addEventListener("alpine:init", () => {
 
 export const PreviewAssetRegistry = new PreviewAssetRegistryClass()
 
+// Add Swiper to window type for TypeScript
 declare global {
   interface Window {
-    settingsModel: any
+    settingsModel: typeof settingsModel
     Swiper: any
   }
 } 

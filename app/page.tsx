@@ -46,29 +46,38 @@ export default function WebPageBuilder() {
   const [htmlCode, setHtmlCode] = useState("")
   const [activeTab, setActiveTab] = useState<'default' | 'custom'>('default')
 
+  // Default settings fallback
+  const DEFAULT_SETTINGS: Settings = {
+    app_id: "TR53CBEI82",
+    api_search_key: "98ef65e220d8d74a2dfac7a67f1dba11",
+    index_name: "prod_en",
+    currency: "EGP"
+  }
+
   // Initialize settings from cookies
   useEffect(() => {
-    // Get settings from cookies
-    const app_id = Cookies.get(COOKIE_PREFIX + "app_id")
-    const api_search_key = Cookies.get(COOKIE_PREFIX + "api_search_key")
-    const index_name = Cookies.get(COOKIE_PREFIX + "index_name")
-    const currency = Cookies.get(COOKIE_PREFIX + "currency")
+    // Get settings from cookies or fallback to defaults
+    const app_id = Cookies.get(COOKIE_PREFIX + "app_id") || DEFAULT_SETTINGS.app_id
+    const api_search_key = Cookies.get(COOKIE_PREFIX + "api_search_key") || DEFAULT_SETTINGS.api_search_key
+    const index_name = Cookies.get(COOKIE_PREFIX + "index_name") || DEFAULT_SETTINGS.index_name
+    const currency = Cookies.get(COOKIE_PREFIX + "currency") || DEFAULT_SETTINGS.currency
 
-    // Only pass settings if required values are present
-    if (app_id && api_search_key && index_name) {
-      const settings: Settings = {
-        app_id,
-        api_search_key,
-        index_name,
-        currency: currency || "EGP" // Use cookie value or default
-      }
-      
-      // Initialize settings model first
-      settingsModel.initializeSettings(settings)
-      setSettings(settings)
-      setHasSettings(true)
+    // Always pass settings (from cookies or defaults)
+    const settings: Settings = {
+      app_id,
+      api_search_key,
+      index_name,
+      currency
     }
+    settingsModel.initializeSettings(settings)
+    setSettings(settings)
+    setHasSettings(true)
   }, [])
+
+  // Log whenever components state changes
+  useEffect(() => {
+    console.log("[DEBUG] Components state updated:", components)
+  }, [components])
 
   // Update HTML when components change
   useEffect(() => {
@@ -80,13 +89,8 @@ export default function WebPageBuilder() {
     const codeHtml = generateHTML(components, false)
     setHtmlCode(codeHtml)
 
-    requestAnimationFrame(() => {
-      const previewContainer = document.getElementById("preview")
-      if (previewContainer) {
-        previewContainer.innerHTML = previewHtml
-        PreviewAssetRegistry.injectDefaultAssets()
-      }
-    })
+    // The useEffect that sets previewContainer.innerHTML is removed.
+    // The preview HTML is now rendered directly in the JSX.
   }, [components, hasSettings, settings])
 
   const handleAddComponent = (type: string) => {
@@ -228,7 +232,7 @@ export default function WebPageBuilder() {
   return (
     <div className="flex h-screen">
       {/* Component List Sidebar */}
-      <div className="w-[20%] bg-gray-50 border-r p-4 flex flex-col h-full sidebar md:block hidden">
+      <div className="w-[20%] bg-gray-50 border-r p-4 flex flex-col h-full sidebar md:block hidden relative">
         <div className="flex items-center justify-between mb-4">
           <Button
             variant="ghost"
@@ -248,10 +252,10 @@ export default function WebPageBuilder() {
             >
               <Smartphone className="h-4 w-4" />
             </Button>
-            <Button onClick={() => setShowAddDialog(true)} size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
-              <Plus className="w-4 h-4 mr-1" />
-              Add
-            </Button>
+          <Button onClick={() => setShowAddDialog(true)} size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
+            <Plus className="w-4 h-4 mr-1" />
+            Add
+          </Button>
           </div>
         </div>
 
@@ -309,8 +313,8 @@ export default function WebPageBuilder() {
           </DragDropContext>
         </div>
 
-        {/* Preview Actions */}
-        <div className="mt-4">
+        {/* Fixed Copy Code Button */}
+        <div className="absolute bottom-0 left-0 w-full p-4 bg-gray-50">
           <Button onClick={handleCopyCode} size="sm" className="bg-green-600 hover:bg-green-700 text-white w-full">
             {copiedCode ? (
               <>
@@ -330,25 +334,46 @@ export default function WebPageBuilder() {
       {/* Preview Area */}
       <div className="md:w-[80%] w-full bg-white overflow-auto h-full">
         <div className="min-h-full">
-          {components.length > 0 ? (
-            <div id="preview" className="preview-container" />
-          ) : (
-            <div className="text-center py-12 text-gray-500">
-              <Plus className="w-12 h-12 mx-auto mb-4 opacity-50" />
-              <p className="text-lg font-medium mb-2">Get Started with Your Page</p>
-              <p className="mb-6">Start fresh by adding components from the sidebar, or paste your existing page code to edit it.</p>
-              <Button 
-                onClick={() => {
-                  setShowAddDialog(true)
-                  setActiveTab('custom')
-                }}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                <Code className="w-4 h-4 mr-2" />
-                Paste Existing Page Code
-              </Button>
-            </div>
-          )}
+          {(() => {
+            if (components.length > 0) {
+              console.log("[DEBUG] Rendering preview area with components.")
+              return (
+                <div
+                  id="preview"
+                  className="preview-container"
+                  dangerouslySetInnerHTML={{ __html: generateHTML(components, true) }}
+                />
+              )
+            } else {
+              console.log("[DEBUG] Rendering empty state (no components).")
+              return (
+                <div className="text-center py-12 text-gray-500 flex flex-col items-center justify-center h-full">
+                  <Plus className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p className="text-lg font-medium mb-2">Get Started with Your Page</p>
+                  <p className="mb-6">Start fresh by adding components, or paste your existing page code to edit it.</p>
+                  <div className="flex gap-2 justify-center">
+                    <Button
+                      onClick={() => setShowAddDialog(true)}
+                      className="bg-blue-600 hover:bg-blue-700 text-white flex items-center"
+                    >
+                      <Plus className="w-4 h-4 mr-1" />
+                      Add Component from Scratch
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        setShowAddDialog(true)
+                        setActiveTab('custom')
+                      }}
+                      className="bg-green-600 hover:bg-green-700 text-white flex items-center"
+                    >
+                      <Code className="w-4 h-4 mr-2" />
+                      Paste Existing Page Code
+                    </Button>
+                  </div>
+                </div>
+              )
+            }
+          })()}
         </div>
       </div>
 

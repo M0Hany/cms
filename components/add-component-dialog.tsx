@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { FerrisWheelIcon as Carousel, Grid, Star, Code, ShoppingCart } from "lucide-react"
+import { FerrisWheelIcon as Carousel, Grid, Star, Code, ShoppingCart, HelpCircle } from "lucide-react"
 
 export interface AddComponentDialogProps {
   isOpen: boolean
@@ -31,13 +31,14 @@ export function AddComponentDialog({
     setCurrentTab(activeTab)
   }, [activeTab])
 
-  const components = [
+  const contentComponents = [
     {
       type: "swiper",
       name: "Swiper Carousel",
       description: "Responsive image carousel with navigation and pagination",
       icon: Carousel,
       preview: "Image slider with multiple slides",
+      category: "content"
     },
     {
       type: "four-categories",
@@ -45,6 +46,7 @@ export function AddComponentDialog({
       description: "Grid layout with 4 category images and links",
       icon: Grid,
       preview: "2x2 grid of category images",
+      category: "content"
     },
     {
       type: "eight-icons",
@@ -52,6 +54,7 @@ export function AddComponentDialog({
       description: "Grid layout with 8 icon images and subtitles",
       icon: Star,
       preview: "8 icons with titles and links",
+      category: "content"
     },
     {
       type: "products-showroom",
@@ -59,6 +62,42 @@ export function AddComponentDialog({
       description: "Dynamic product showcase with category filtering and sale options",
       icon: ShoppingCart,
       preview: "Product carousel with dynamic loading",
+      category: "content"
+    },
+  ]
+
+  const informationalComponents = [
+    {
+      type: "hero-banner",
+      name: "Hero Banner",
+      description: "Large banner with image, title, and subtitle",
+      icon: Star,
+      preview: "Full-width hero banner with overlay text",
+      category: "informational"
+    },
+    {
+      type: "dual-panel-section",
+      name: "Dual Panel Section",
+      description: "Section with text and optional image panel",
+      icon: Grid,
+      preview: "Text panel and optional image panel side by side",
+      category: "informational"
+    },
+    {
+      type: "info-grid-section",
+      name: "Info Grid Section",
+      description: "Grid of info items with icon, title, and subtitles (draggable)",
+      icon: Star,
+      preview: "Grid of info items with drag-and-drop tabs",
+      category: "informational"
+    },
+    {
+      type: "faqs-section",
+      name: "FAQs Section",
+      description: "Frequently Asked Questions with reorderable Q&A pairs",
+      icon: HelpCircle,
+      preview: "FAQs accordion with questions and answers",
+      category: "informational"
     },
   ]
 
@@ -76,37 +115,78 @@ export function AddComponentDialog({
           </TabsList>
 
           <TabsContent value="default" className="mt-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {components.map((component) => {
-                const IconComponent = component.icon
-                return (
-                  <Card
-                    key={component.type}
-                    className="cursor-pointer hover:shadow-lg transition-shadow border-2 hover:border-blue-200"
-                    onClick={() => {
-                      onSelectComponent(component.type)
-                      onClose()
-                    }}
-                  >
-                    <CardHeader className="text-center pb-2">
-                      <div className="mx-auto mb-2 p-3 bg-blue-50 rounded-full w-fit">
-                        <IconComponent className="w-8 h-8 text-blue-600" />
-                      </div>
-                      <CardTitle className="text-lg">{component.name}</CardTitle>
-                      <CardDescription className="text-sm">{component.description}</CardDescription>
-                    </CardHeader>
-                    <CardContent className="pt-2">
-                      <div className="text-center text-xs text-gray-500 bg-gray-50 p-2 rounded">
-                        {component.preview}
-                      </div>
-                      <Button className="w-full mt-3" size="sm">
-                        Add Component
-                      </Button>
-                    </CardContent>
-                  </Card>
-                )
-              })}
-            </div>
+            <Tabs defaultValue="content" className="w-full">
+              <TabsList className="grid w-full grid-cols-2 mb-4">
+                <TabsTrigger value="content">Content</TabsTrigger>
+                <TabsTrigger value="informational">Informational</TabsTrigger>
+              </TabsList>
+              <TabsContent value="content">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {contentComponents.map((component) => {
+                    const IconComponent = component.icon
+                    return (
+                      <Card
+                        key={component.type}
+                        className="cursor-pointer hover:shadow-lg transition-shadow border-2 hover:border-blue-200"
+                        onClick={() => {
+                          onSelectComponent(component.type)
+                          onClose()
+                        }}
+                      >
+                        <CardHeader className="text-center pb-2">
+                          <div className="mx-auto mb-2 p-3 bg-blue-50 rounded-full w-fit">
+                            <IconComponent className="w-8 h-8 text-blue-600" />
+                          </div>
+                          <CardTitle className="text-lg">{component.name}</CardTitle>
+                          <CardDescription className="text-sm">{component.description}</CardDescription>
+                        </CardHeader>
+                        <CardContent className="pt-2">
+                          <div className="text-center text-xs text-gray-500 bg-gray-50 p-2 rounded">
+                            {component.preview}
+                          </div>
+                          <Button className="w-full mt-3" size="sm">
+                            Add Component
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    )
+                  })}
+                </div>
+              </TabsContent>
+              <TabsContent value="informational">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {informationalComponents.map((component) => {
+                    const IconComponent = component.icon
+                    return (
+                      <Card
+                        key={component.type}
+                        className="cursor-pointer hover:shadow-lg transition-shadow border-2 hover:border-blue-200"
+                        onClick={() => {
+                          onSelectComponent(component.type)
+                          onClose()
+                        }}
+                      >
+                        <CardHeader className="text-center pb-2">
+                          <div className="mx-auto mb-2 p-3 bg-blue-50 rounded-full w-fit">
+                            <IconComponent className="w-8 h-8 text-blue-600" />
+                          </div>
+                          <CardTitle className="text-lg">{component.name}</CardTitle>
+                          <CardDescription className="text-sm">{component.description}</CardDescription>
+                        </CardHeader>
+                        <CardContent className="pt-2">
+                          <div className="text-center text-xs text-gray-500 bg-gray-50 p-2 rounded">
+                            {component.preview}
+                          </div>
+                          <Button className="w-full mt-3" size="sm">
+                            Add Component
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    )
+                  })}
+                </div>
+              </TabsContent>
+            </Tabs>
           </TabsContent>
 
           <TabsContent value="custom" className="mt-6">

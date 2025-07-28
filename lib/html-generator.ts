@@ -219,6 +219,9 @@ function extractComponentConfig(html: string, type: string): any {
 export function parseComponents(html: string): ComponentType[] {
   const components: ComponentType[] = []
   
+  // Remove <div id="ZA_body_fix">...</div> wrapper if present
+  html = html.replace(/<div\s+id=["']ZA_body_fix["'][^>]*>([\s\S]*?)<\/div>/i, '$1')
+
   html = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
   html = html.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
   html = html.replace(/<link[^>]*rel="stylesheet"[^>]*>/gi, '')

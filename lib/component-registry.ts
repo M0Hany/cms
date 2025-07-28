@@ -220,8 +220,10 @@ class ComponentRegistryClass {
 </div>
   <div class="component-container" style="margin-left: 10px;">`
         } else {
+          // Only add RTL class if direction is explicitly set to RTL
+          const containerClass = `showroom-container${isRTL ? ' showroom-container-rtl' : ''}`
           headerHtml = `<div class="component-container">
-  <div class="showroom-container showroom-container-rtl">
+  <div class="${containerClass}">
     <a style="text-decoration: none; display: block; position: relative" href="${config.bannerConfig.linkUrl}">
       <div class="showroom-banner-wrapper">
         <span class="showroom-desktop-banner">
@@ -326,6 +328,135 @@ class ComponentRegistryClass {
 
         return htmlCode
       },
+    })
+
+    // Hero Banner Component
+    this.register("hero-banner", {
+      name: "Hero Banner",
+      defaultConfig: {
+        image: "",
+        title: "",
+        subtitle: ""
+      },
+      generateHTML: (config) => {
+        return `<!--Hero Banner Start-->
+<div class="hero-banner-wrapper">
+  <div class="hero-banner-padding">
+    <div class="hero-banner-image-wrapper">
+      <img src="${config.image}" class="hero-banner-image" />
+    </div>
+    <div class="hero-banner-overlay"></div>
+    <div class="hero-banner-text-wrapper">
+      <div class="hero-banner-text-container">
+        <div class="hero-banner-text">
+          <h1 class="hero-banner-title">${config.title}</h1>
+          <p class="hero-banner-subtitle">${config.subtitle}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<!--Hero Banner End-->`
+      }
+    })
+
+    // Dual Panel Section Component
+    this.register("dual-panel-section", {
+      name: "Dual Panel Section",
+      defaultConfig: {
+        title: "",
+        description: "",
+        image: "",
+        imageEnabled: true
+      },
+      generateHTML: (config) => {
+        return `<!--Dual Panel Section Start-->
+<div class="dual-panel-section">
+  <div class="section-text dual-panel-content">
+    <h2 class="section-text-title">
+      ${config.title}
+    </h2>
+    <p class="section-text-description">${config.description}</p>
+  </div>
+  ${config.imageEnabled ? `<div class="section-image dual-panel-content">
+    <img src="${config.image}" class="media-content" />
+  </div>` : ""}
+</div>
+<!--Dual Panel Section End-->`
+      }
+    })
+
+    // Info Grid Section Component
+    this.register("info-grid-section", {
+      name: "Info Grid Section",
+      defaultConfig: {
+        title: "",
+        items: [
+          {
+            icon: "",
+            title: "",
+            subtitles: [""]
+          }
+        ]
+      },
+      generateHTML: (config) => {
+        const itemsHTML = (config.items || []).map(item => `
+    <li class="info-grid-list-item">
+      <div class="info-grid-list-item-icon">
+        <img src="${item.icon}" class="info-grid-list-item-icon-image" />
+      </div>
+      <div class="info-grid-list-item-text">
+        <div class="info-grid-list-item-title">
+          ${item.title}
+        </div>
+        ${(item.subtitles || []).map(sub => `<div class="info-grid-list-item-subtitle">${sub}</div>`).join("")}
+      </div>
+    </li>`).join("")
+        return `<!--Info Grid Section Start -->
+<div class="info-grid-section">
+  <h2 class="info-grid-section-title">${config.title}</h2>
+  <ul class="info-grid-list">
+    ${itemsHTML}
+  </ul>
+</div>
+<!--Info Grid Section End-->`
+      }
+    })
+
+    // FAQs Section Component
+    this.register("faqs-section", {
+      name: "FAQs Section",
+      defaultConfig: {
+        title: "Frequently Asked Questions",
+        faqs: [
+          { question: "", answer: "" }
+        ]
+      },
+      generateHTML: (config) => {
+        const faqsHTML = (config.faqs || []).map(faq => `
+        <details class="question-wrapper">
+          <summary class="question-text">
+            ${faq.question}
+          </summary>
+          <div class="answer-wrapper">
+            <p class="answer-text">
+              ${faq.answer}
+            </p>
+          </div>
+        </details>`).join("")
+        return `<!--FAQs section Start-->
+<div class="faqs-section-wrapper">
+  <div class="faqs-section">
+    <div class="faqs-header-wrapper">
+      <h2 class="faqs-header">${config.title}</h2>
+      <div class="questions-section">
+        ${faqsHTML}
+      </div>
+    </div>
+  </div>
+</div>
+<!--FAQs section End-->`
+      }
     })
   }
 
