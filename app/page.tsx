@@ -10,7 +10,7 @@ import { MobileTutorialDialog } from "@/components/mobile-tutorial-dialog"
 import { AssetRegistry } from "@/lib/asset-registry"
 import { PreviewAssetRegistry } from "@/lib/preview-asset-registry"
 import { ComponentRegistry } from "@/lib/component-registry"
-import { generateHTML, parseComponents } from "@/lib/html-generator"
+import { generateHTML, parseComponents, cleanPastedCode } from "@/lib/html-generator"
 import type { Component } from "@/types/component"
 import type { Settings } from "@/types/settings"
 import { ShowroomSettingsDialog } from "@/components/showroom-settings-dialog"
@@ -93,6 +93,101 @@ export default function WebPageBuilder() {
     // The preview HTML is now rendered directly in the JSX.
   }, [components, hasSettings, settings])
 
+  // Inject Alpine.js functions globally
+  useEffect(() => {
+    if (!hasSettings) {
+      return
+    }
+
+    // Define the functions globally
+    (window as any).getProductsFromCategory = async function(prodCount: number, categoryNumber: string, priorityObjectIDs: string[] = []) {
+      const settings = (window as any).settingsModel?.getSettings() || {};
+      const clientAlg = (window as any).algoliasearch(settings.app_id, settings.api_search_key);
+      const indexAlg = clientAlg.initIndex(settings.index_name);
+      const objectIDFilters = priorityObjectIDs.map((id: string) => `objectID:${id}`).join(" OR ");
+
+      try {
+        const { hits: priorityHits } = await indexAlg.search("", {
+          filters: objectIDFilters.length ? objectIDFilters : `category = ${categoryNumber}`,
+          analytics: false,
+        });
+
+        if (priorityObjectIDs.length) {
+          const { hits: categoryHits } = await indexAlg.search("", {
+            filters: `category = ${categoryNumber}`,
+            analytics: false,
+          });
+
+          const uniqueCategoryHits = categoryHits.filter(
+            (hit: any) => !priorityObjectIDs.includes(hit.objectID)
+          );
+
+          return [...priorityHits, ...uniqueCategoryHits].slice(0, prodCount);
+        } else {
+          return priorityHits.sort((a: any, b: any) => b.popularity - a.popularity).slice(0, prodCount);
+        }
+      } catch (error) {
+        return [];
+      }
+    };
+
+    (window as any).getDiscountedProductsFromCategory = async function(prodCount: number, categoryNumber: string, priorityObjectIDs: string[] = []) {
+      const settings = (window as any).settingsModel?.getSettings() || {};
+      const clientAlg = (window as any).algoliasearch(settings.app_id, settings.api_search_key);
+      const indexAlg = clientAlg.initIndex(settings.index_name);
+      const objectIDFilters = priorityObjectIDs.map((id: string) => `objectID:${id}`).join(" OR ");
+
+      try {
+        const { hits: priorityHits } = await indexAlg.search("", {
+          filters: objectIDFilters.length ? objectIDFilters : `category = ${categoryNumber} AND percentoff > 0`,
+          analytics: false,
+        });
+
+        if (priorityObjectIDs.length) {
+          const { hits: categoryHits } = await indexAlg.search("", {
+            filters: `category = ${categoryNumber} AND percentoff > 0`,
+            analytics: false,
+          });
+
+          const uniqueCategoryHits = categoryHits.filter(
+            (hit: any) => !priorityObjectIDs.includes(hit.objectID)
+          );
+
+          return [...priorityHits, ...uniqueCategoryHits].slice(0, prodCount);
+        } else {
+          return priorityHits.sort((a: any, b: any) => b.popularity - a.popularity).slice(0, prodCount);
+        }
+      } catch (error) {
+        return [];
+      }
+    };
+
+    (window as any).getProductsManual = async function(objectIDs: string[] = []) {
+      const settings = (window as any).settingsModel?.getSettings() || {};
+      const clientAlg = (window as any).algoliasearch(settings.app_id, settings.api_search_key);
+      const indexAlg = clientAlg.initIndex(settings.index_name);
+      const objectIDFilters = objectIDs.map((id: string) => `objectID:${id}`).join(" OR ");
+
+      try {
+        const { hits } = await indexAlg.search("", {
+          filters: objectIDFilters,
+          analytics: false,
+        });
+
+        return hits;
+      } catch (error) {
+        return [];
+      }
+    };
+
+    (window as any).updateImageUrl = function(url: string) {
+      if (!url) return '';
+      return url;
+    };
+
+    console.log('[Alpine] Functions injected globally');
+  }, [hasSettings, settings]);
+
   const handleAddComponent = (type: string) => {
     if (type) {
       const template = ComponentRegistry.getTemplate(type)
@@ -114,7 +209,9 @@ export default function WebPageBuilder() {
   }
 
   const handleAddCustomComponent = (htmlCode: string) => {
-    const parsedComponents = parseComponents(htmlCode)
+    // Clean the pasted code first to remove any wrapper elements
+    const cleanedCode = cleanPastedCode(htmlCode)
+    const parsedComponents = parseComponents(cleanedCode)
     setComponents((prevComponents) => [...prevComponents, ...parsedComponents])
   }
 
@@ -152,8 +249,11 @@ export default function WebPageBuilder() {
       newHtmlLength: newHtml.length
     })
 
+    // Clean the pasted code first to remove any wrapper elements
+    const cleanedHtml = cleanPastedCode(newHtml)
+    
     // Parse the new HTML to extract updated configuration
-    const parsedComponents = parseComponents(newHtml)
+    const parsedComponents = parseComponents(cleanedHtml)
     console.log("[handleSaveComponentCode] Parsed components:", parsedComponents)
 
     if (parsedComponents.length === 0) {
@@ -229,102 +329,168 @@ export default function WebPageBuilder() {
     // The button will remain in loading state until components are modified or rearranged
   }
 
+  const handleScrollToComponent = (componentId: string) => {
+    // Find the component in the preview area
+    const previewContainer = document.getElementById('preview')
+    if (!previewContainer) {
+      console.log('[Scroll] Preview container not found')
+      return
+    }
+
+    // Find the component element by its ID
+    let componentElement = previewContainer.querySelector(`[data-component-id="${componentId}"]`)
+    
+    // If not found, try alternative selectors for showroom components
+    if (!componentElement && componentId.includes('products-showroom')) {
+      // Try to find by showroom-component class
+      componentElement = previewContainer.querySelector(`.showroom-component[data-component-id="${componentId}"]`)
+      
+      // If still not found, try to find any showroom component
+      if (!componentElement) {
+        const showroomElements = previewContainer.querySelectorAll('.showroom-component')
+        if (showroomElements.length > 0) {
+          // Find the showroom component that corresponds to this ID
+          // This is a fallback for when the data-component-id is not properly set
+          const componentIndex = components.findIndex(c => c.id === componentId)
+          if (componentIndex >= 0 && showroomElements[componentIndex]) {
+            componentElement = showroomElements[componentIndex]
+          }
+        }
+      }
+    }
+    
+    if (!componentElement) {
+      console.log('[Scroll] Component element not found for ID:', componentId)
+      return
+    }
+
+    console.log('[Scroll] Found component element:', componentElement)
+
+    // Scroll to the component
+    componentElement.scrollIntoView({ 
+      behavior: 'smooth', 
+      block: 'center' 
+    })
+
+    // Add highlight effect
+    componentElement.classList.add('component-highlight')
+    
+    // Remove highlight after animation
+    setTimeout(() => {
+      componentElement.classList.remove('component-highlight')
+    }, 2000)
+  }
+
   return (
-    <div className="flex h-screen">
+    <div className="flex h-screen overflow-hidden">
       {/* Component List Sidebar */}
-      <div className="w-[20%] bg-gray-50 border-r p-4 flex flex-col h-full sidebar md:block hidden relative">
-        <div className="flex items-center justify-between mb-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowSettingsDialog(true)}
-            className="flex items-center gap-2 bg-blue-50 hover:bg-blue-100 text-blue-700"
-          >
-            <SettingsIcon className="h-4 w-4" />
-            Algolia Settings
-          </Button>
-          <div className="flex items-center gap-2">
+      <div className="w-[20%] bg-gray-50 border-r h-screen sidebar md:block hidden relative">
+        {/* Top Fixed Header Section */}
+        <div className="absolute top-0 left-0 right-0 h-20 bg-gray-50 border-b p-2 z-10">
+          <div className="flex items-center justify-between h-full">
             <Button
               variant="ghost"
-              size="icon"
-              onClick={() => setShowMobileTutorial(true)}
-              className="text-gray-500 hover:text-gray-700"
+              size="sm"
+              onClick={() => setShowSettingsDialog(true)}
+              className="flex items-center gap-1 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs px-2 py-1"
             >
-              <Smartphone className="h-4 w-4" />
+              <SettingsIcon className="h-3 w-3" />
+              <span className="hidden sm:inline">Algolia</span>
             </Button>
-          <Button onClick={() => setShowAddDialog(true)} size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
-            <Plus className="w-4 h-4 mr-1" />
-            Add
-          </Button>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowMobileTutorial(true)}
+                className="text-gray-500 hover:text-gray-700 h-8 w-8"
+              >
+                <Smartphone className="h-3 w-3" />
+              </Button>
+              <Button 
+                onClick={() => setShowAddDialog(true)} 
+                size="sm" 
+                className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-2 py-1 h-8"
+              >
+                <Plus className="w-3 h-3 mr-1" />
+                <span className="hidden sm:inline">Add</span>
+              </Button>
+            </div>
           </div>
         </div>
 
-        {/* Draggable List */}
-        <div className="flex-1 overflow-auto">
-          <DragDropContext onDragEnd={handleDragEnd}>
-            <Droppable droppableId="components">
-              {(provided) => (
-                <div {...provided.droppableProps} ref={provided.innerRef}>
-                  {components.map((component, index) => (
-                    <Draggable key={component.id} draggableId={component.id} index={index}>
-                      {(provided, snapshot) => (
-                        <div
-                          ref={provided.innerRef}
-                          {...provided.draggableProps}
-                          className={`bg-white p-3 rounded-lg mb-2 border flex items-center justify-between group ${
-                            snapshot.isDragging ? "shadow-lg" : ""
-                          }`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <div
-                              {...provided.dragHandleProps}
-                              className="cursor-grab hover:bg-gray-50 p-1 rounded"
+        {/* Middle Scrollable Components Area */}
+        <div className="absolute top-20 bottom-16 left-0 right-0 overflow-y-auto">
+          <div className="p-4">
+            <DragDropContext onDragEnd={handleDragEnd}>
+              <Droppable droppableId="components">
+                {(provided) => (
+                  <div {...provided.droppableProps} ref={provided.innerRef}>
+                    {components.map((component, index) => (
+                      <Draggable key={component.id} draggableId={component.id} index={index}>
+                        {(provided, snapshot) => (
+                          <div
+                            ref={provided.innerRef}
+                            {...provided.draggableProps}
+                            className={`bg-white p-3 rounded-lg mb-2 border flex items-center justify-between group ${
+                              snapshot.isDragging ? "shadow-lg" : ""
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <div
+                                {...provided.dragHandleProps}
+                                className="cursor-grab hover:bg-gray-50 p-1 rounded"
+                              >
+                                <GripVertical className="w-4 h-4 text-gray-400" />
+                              </div>
+                              <span 
+                              className="cursor-pointer hover:text-blue-600"
+                              onClick={() => handleScrollToComponent(component.id)}
                             >
-                              <GripVertical className="w-4 h-4 text-gray-400" />
+                              {componentDisplayNames[component.type] || component.type}
+                            </span>
                             </div>
-                            <span>{componentDisplayNames[component.type] || component.type}</span>
+                            <div className="flex gap-1">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleEditComponent(component)}
+                                className="opacity-0 group-hover:opacity-100 h-6 w-6 p-0"
+                              >
+                                <SettingsIcon className="w-3 h-3" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleDeleteComponent(component.id)}
+                                className="opacity-0 group-hover:opacity-100 h-6 w-6 p-0 text-red-600"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </Button>
+                            </div>
                           </div>
-                          <div className="flex gap-1">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleEditComponent(component)}
-                              className="opacity-0 group-hover:opacity-100 h-6 w-6 p-0"
-                            >
-                              <SettingsIcon className="w-3 h-3" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleDeleteComponent(component.id)}
-                              className="opacity-0 group-hover:opacity-100 h-6 w-6 p-0 text-red-600"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </Button>
-                          </div>
-                        </div>
-                      )}
-                    </Draggable>
-                  ))}
-                  {provided.placeholder}
-                </div>
-              )}
-            </Droppable>
-          </DragDropContext>
+                        )}
+                      </Draggable>
+                    ))}
+                    {provided.placeholder}
+                  </div>
+                )}
+              </Droppable>
+            </DragDropContext>
+          </div>
         </div>
 
-        {/* Fixed Copy Code Button */}
-        <div className="absolute bottom-0 left-0 w-full p-4 bg-gray-50">
-          <Button onClick={handleCopyCode} size="sm" className="bg-green-600 hover:bg-green-700 text-white w-full">
+        {/* Bottom Fixed Footer Section */}
+        <div className="absolute bottom-0 left-0 right-0 h-16 bg-gray-50 border-t p-2 z-10">
+          <Button onClick={handleCopyCode} size="sm" className="bg-green-600 hover:bg-green-700 text-white w-full h-12 text-sm">
             {copiedCode ? (
               <>
                 <Check className="w-4 h-4 mr-1" />
-                Copied!
+                <span className="hidden sm:inline">Copied!</span>
               </>
             ) : (
               <>
                 <Copy className="w-4 h-4 mr-1" />
-                Copy Code
+                <span className="hidden sm:inline">Copy Code</span>
               </>
             )}
           </Button>
@@ -332,7 +498,7 @@ export default function WebPageBuilder() {
       </div>
 
       {/* Preview Area */}
-      <div className="md:w-[80%] w-full bg-white overflow-auto h-full">
+      <div className="md:w-[80%] w-full bg-white overflow-auto h-screen">
         <div className="min-h-full">
           {(() => {
             if (components.length > 0) {
@@ -419,6 +585,26 @@ export default function WebPageBuilder() {
         .component-preview > * {
           margin-top: 0;
           margin-bottom: 0;
+        }
+
+        /* Component highlight animation */
+        .component-highlight {
+          animation: highlight-pulse 2s ease-in-out;
+        }
+
+        @keyframes highlight-pulse {
+          0% {
+            box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
+            outline: 2px solid rgba(59, 130, 246, 0.7);
+          }
+          50% {
+            box-shadow: 0 0 0 10px rgba(59, 130, 246, 0.3);
+            outline: 2px solid rgba(59, 130, 246, 0.9);
+          }
+          100% {
+            box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+            outline: 2px solid rgba(59, 130, 246, 0);
+          }
         }
 
         /* Hide sidebar on mobile devices */

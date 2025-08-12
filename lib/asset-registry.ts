@@ -35,6 +35,11 @@ class AssetRegistryClass {
       url: "https://decathlon-egypt.github.io/Decathlon-Egypt/CMS%20Scripts%20&%20Styles/Banner%20carousel.js",
       id: "banner-carousel-js",
     },
+    {
+      type: "js",
+      url: "https://decathlon-egypt.github.io/Decathlon-Egypt/CMS%20Scripts%20&%20Styles/categories_swiper.js",
+      id: "categories-swiper-js",
+    },
     // Stylesheets
     {
       type: "css",
@@ -91,6 +96,21 @@ class AssetRegistryClass {
       type: "css",
       url: "https://decathlon-egypt.github.io/Decathlon-Egypt/CMS%20Scripts%20&%20Styles/faqs%20section.css",
       id: "faqs-section-css",
+    },
+    {
+      type: "css",
+      url: "https://decathlon-egypt.github.io/Decathlon-Egypt/CMS%20Scripts%20&%20Styles/homepage.css",
+      id: "homepage-css",
+    },
+    {
+      type: "css",
+      url: "https://decathlon-egypt.github.io/Decathlon-Egypt/CMS%20Scripts%20&%20Styles/horizontal_wrapper.css",
+      id: "horizontal-wrapper-css",
+    },
+    {
+      type: "css",
+      url: "https://decathlon-egypt.github.io/Decathlon-Egypt/CMS%20Scripts%20&%20Styles/categories_swiper.css",
+      id: "categories-swiper-css",
     },
   ]
 

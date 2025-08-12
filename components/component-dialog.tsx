@@ -244,12 +244,6 @@ export function ComponentDialog({ component, isOpen, onClose, onSave, onSaveCode
               </div>
             )}
           </div>
-          <div className="flex justify-end gap-2 p-6 border-t">
-            <Button variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button onClick={handleSave}>Save Component</Button>
-          </div>
         </div>
       </div>
     )
@@ -370,12 +364,6 @@ export function ComponentDialog({ component, isOpen, onClose, onSave, onSaveCode
                 />
               </div>
             </div>
-          </div>
-          <div className="flex justify-end gap-2 p-6 border-t">
-            <Button variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button onClick={handleSave}>Save Component</Button>
           </div>
         </div>
       </div>
@@ -501,12 +489,6 @@ export function ComponentDialog({ component, isOpen, onClose, onSave, onSaveCode
                 />
               </div>
             </div>
-          </div>
-          <div className="flex justify-end gap-2 p-6 border-t">
-            <Button variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button onClick={handleSave}>Save Component</Button>
           </div>
         </div>
       </div>

@@ -5,6 +5,92 @@ import { PreviewAssetRegistry } from "./preview-asset-registry"
 import { settingsModel } from "./settings-model"
 import type { Component as ComponentType } from "@/types/component"
 
+/**
+ * Cleans pasted HTML code by removing common wrapper elements and unnecessary content
+ * @param html - The raw HTML string to clean
+ * @returns Cleaned HTML string
+ */
+export function cleanPastedCode(html: string): string {
+  // Remove <div id="ZA_body_fix">...</div> wrapper if present
+  // Handle various formats: <div id="ZA_body_fix">, <div id='ZA_body_fix'>, <div id=ZA_body_fix>
+  const originalLength = html.length
+  
+  // Find the opening <div id="ZA_body_fix"> tag
+  const openingTagRegex = /<div\s+id\s*=\s*["']?ZA_body_fix["']?[^>]*>/i
+  const openingMatch = html.match(openingTagRegex)
+  
+  if (openingMatch) {
+    const openingTag = openingMatch[0]
+    const openingTagIndex = html.indexOf(openingTag)
+    
+    // Find the corresponding closing </div> tag by counting opening and closing divs
+    let divCount = 0
+    let closingTagIndex = -1
+    
+    for (let i = openingTagIndex; i < html.length; i++) {
+      if (html.substring(i, i + 4) === '<div') {
+        divCount++
+      } else if (html.substring(i, i + 6) === '</div>') {
+        divCount--
+        if (divCount === 0) {
+          closingTagIndex = i + 6 // Include the full </div> tag
+          break
+        }
+      }
+    }
+    
+    if (closingTagIndex !== -1) {
+      // Remove the opening tag and closing tag, keeping the content in between
+      const beforeOpening = html.substring(0, openingTagIndex)
+      const content = html.substring(openingTagIndex + openingTag.length, closingTagIndex - 6)
+      const afterClosing = html.substring(closingTagIndex)
+      
+      html = beforeOpening + content + afterClosing
+      console.log('[cleanPastedCode] Removed ZA_body_fix wrapper, original length:', originalLength, 'cleaned length:', html.length)
+    }
+  }
+  
+  // Also handle cases where there might be different attribute orders
+  const alternativeOpeningRegex = /<div[^>]*id\s*=\s*["']?ZA_body_fix["']?[^>]*>/i
+  const alternativeMatch = html.match(alternativeOpeningRegex)
+  
+  if (alternativeMatch && !openingMatch) {
+    const openingTag = alternativeMatch[0]
+    const openingTagIndex = html.indexOf(openingTag)
+    
+    // Find the corresponding closing </div> tag by counting opening and closing divs
+    let divCount = 0
+    let closingTagIndex = -1
+    
+    for (let i = openingTagIndex; i < html.length; i++) {
+      if (html.substring(i, i + 4) === '<div') {
+        divCount++
+      } else if (html.substring(i, i + 6) === '</div>') {
+        divCount--
+        if (divCount === 0) {
+          closingTagIndex = i + 6 // Include the full </div> tag
+          break
+        }
+      }
+    }
+    
+    if (closingTagIndex !== -1) {
+      // Remove the opening tag and closing tag, keeping the content in between
+      const beforeOpening = html.substring(0, openingTagIndex)
+      const content = html.substring(openingTagIndex + openingTag.length, closingTagIndex - 6)
+      const afterClosing = html.substring(closingTagIndex)
+      
+      html = beforeOpening + content + afterClosing
+      console.log('[cleanPastedCode] Removed ZA_body_fix wrapper (alternative), original length:', originalLength, 'cleaned length:', html.length)
+    }
+  }
+  
+  // Remove any leading/trailing whitespace
+  html = html.trim()
+  
+  return html
+}
+
 export interface Component {
   id: string
   type: string
@@ -25,8 +111,11 @@ export function generateHTML(components: Component[], isPreview: boolean = false
 
   const htmlParts = components.map((component) => {
     const template = registry.getTemplate(component.type)
+    
+    // For custom components or unknown types, use the original HTML
     if (!template) {
-      return `<!-- Unknown component type: ${component.type} -->`
+      const htmlWithId = addComponentIdToFirstElement(component.html, component.id)
+      return `<!-- COMPONENT_START ${component.id} -->\n${htmlWithId}\n<!-- COMPONENT_END ${component.id} -->`
     }
 
     if (component.type === "products-showroom") {
@@ -37,11 +126,13 @@ export function generateHTML(components: Component[], isPreview: boolean = false
         currency: currentSettings.currency
       }
 
-      return `<!-- COMPONENT_START ${component.id} -->\n${html}\n<!-- COMPONENT_END ${component.id} -->`
+      const htmlWithId = addComponentIdToFirstElement(html, component.id)
+      return `<!-- COMPONENT_START ${component.id} -->\n${htmlWithId}\n<!-- COMPONENT_END ${component.id} -->`
     }
 
     const html = template.generateHTML(component.config)
-    return `<!-- COMPONENT_START ${component.id} -->\n${html}\n<!-- COMPONENT_END ${component.id} -->`
+    const htmlWithId = addComponentIdToFirstElement(html, component.id)
+    return `<!-- COMPONENT_START ${component.id} -->\n${htmlWithId}\n<!-- COMPONENT_END ${component.id} -->`
   })
 
   const combinedHTML = htmlParts.join("\n\n")
@@ -94,20 +185,35 @@ function extractComponentConfig(html: string, type: string): any {
       if (!html.includes('class="swiper mySwiper"')) {
         const linkMatch = html.match(/<a href="([^"]*)"[^>]*>/);
         const sourceMatches = html.match(/<source[^>]*media="[^"]*"[^>]*srcset="([^"]*)"[^>]*>/g);
-        const imgMatch = html.match(/<img[^>]*alt="([^"]*)"[^>]*src="([^"]*)"[^>]*>/);
+        const imgMatch = html.match(/<img[^>]*src="([^"]*)"[^>]*alt="([^"]*)"[^>]*>/);
+        const imgMatchAltFirst = html.match(/<img[^>]*alt="([^"]*)"[^>]*src="([^"]*)"[^>]*>/);
 
-        if (linkMatch && sourceMatches && imgMatch) {
+        // Try both patterns to handle different attribute orders
+        let imgSrc = ""
+        let imgAlt = ""
+        
+        if (imgMatch) {
+          // src comes first: match[1] = src, match[2] = alt
+          imgSrc = imgMatch[1]
+          imgAlt = imgMatch[2]
+        } else if (imgMatchAltFirst) {
+          // alt comes first: match[1] = alt, match[2] = src
+          imgSrc = imgMatchAltFirst[2]
+          imgAlt = imgMatchAltFirst[1]
+        }
+
+        if (linkMatch && sourceMatches && (imgMatch || imgMatchAltFirst)) {
           const desktopSource = sourceMatches.find(s => s.includes('min-width: 768px'));
           const mobileSource = sourceMatches.find(s => s.includes('max-width: 767px'));
 
-          const desktopImage = desktopSource?.match(/srcset="([^"]*)"/)?.[1] || imgMatch[2];
+          const desktopImage = desktopSource?.match(/srcset="([^"]*)"/)?.[1] || imgSrc;
           const mobileImage = mobileSource?.match(/srcset="([^"]*)"/)?.[1] || desktopImage;
 
           config.slides = [{
             linkUrl: linkMatch[1] || "",
             desktopImage: desktopImage || "",
             mobileImage: mobileImage || "",
-            altText: imgMatch[1] || ""
+            altText: imgAlt || ""
           }];
         } else {
           config.slides = [];
@@ -134,12 +240,27 @@ function extractComponentConfig(html: string, type: string): any {
       const categoryWrappers = html.match(/<div class="four_categories_category_wrapper">[\s\S]*?<\/div>\s*<\/div>/g) || []
       config.categories = categoryWrappers.map(wrapper => {
         const linkMatch = wrapper.match(/href="([^"]*)"/)
-        const imgMatch = wrapper.match(/<img[^>]*alt="([^"]*)"[^>]*src="([^"]*)"/)
+        const imgMatch = wrapper.match(/<img[^>]*src="([^"]*)"[^>]*alt="([^"]*)"/)
+        const imgMatchAltFirst = wrapper.match(/<img[^>]*alt="([^"]*)"[^>]*src="([^"]*)"/)
+        
+        // Try both patterns to handle different attribute orders
+        let imageUrl = ""
+        let altText = ""
+        
+        if (imgMatch) {
+          // src comes first: match[1] = src, match[2] = alt
+          imageUrl = imgMatch[1]
+          altText = imgMatch[2]
+        } else if (imgMatchAltFirst) {
+          // alt comes first: match[1] = alt, match[2] = src
+          imageUrl = imgMatchAltFirst[2]
+          altText = imgMatchAltFirst[1]
+        }
         
         return {
           linkUrl: linkMatch ? linkMatch[1] : "",
-          imageUrl: imgMatch ? imgMatch[2] : "",
-          altText: imgMatch ? imgMatch[1] : ""
+          imageUrl: imageUrl,
+          altText: altText
         }
       })
 
@@ -159,13 +280,28 @@ function extractComponentConfig(html: string, type: string): any {
       const iconWrappers = html.match(/<a[^>]*class="icon-wrapper"[\s\S]*?<\/a>/g) || []
       config.icons = iconWrappers.map(wrapper => {
         const linkMatch = wrapper.match(/href="([^"]*)"/)
-        const imgMatch = wrapper.match(/<img[^>]*alt="([^"]*)"[^>]*src="([^"]*)"/)
+        const imgMatch = wrapper.match(/<img[^>]*src="([^"]*)"[^>]*alt="([^"]*)"/)
+        const imgMatchAltFirst = wrapper.match(/<img[^>]*alt="([^"]*)"[^>]*src="([^"]*)"/)
         const subtitleMatch = wrapper.match(/<span>([^<]*)<\/span>/)
+        
+        // Try both patterns to handle different attribute orders
+        let imageUrl = ""
+        let altText = ""
+        
+        if (imgMatch) {
+          // src comes first: match[1] = src, match[2] = alt
+          imageUrl = imgMatch[1]
+          altText = imgMatch[2]
+        } else if (imgMatchAltFirst) {
+          // alt comes first: match[1] = alt, match[2] = src
+          imageUrl = imgMatchAltFirst[2]
+          altText = imgMatchAltFirst[1]
+        }
         
         return {
           linkUrl: linkMatch ? linkMatch[1] : "",
-          imageUrl: imgMatch ? imgMatch[2] : "",
-          altText: imgMatch ? imgMatch[1] : "",
+          imageUrl: imageUrl,
+          altText: altText,
           subtitle: subtitleMatch ? subtitleMatch[1] : ""
         }
       })
@@ -207,7 +343,8 @@ function extractComponentConfig(html: string, type: string): any {
         config.bannerConfig = bannerConfig
       }
 
-      const intersectMatch = html.match(/x-intersect[^"]*"[^"]*getProductsFromCategory\((\d+),\s*(\d+),\s*\[(.*?)\]\)/);
+      // Try to match different product function patterns
+      let intersectMatch = html.match(/x-intersect[^"]*"[^"]*getProductsFromCategory\((\d+),\s*['"]?(\d+)['"]?(?:,\s*\[(.*?)\])?\)/);
       if (intersectMatch) {
         config.categoryNumber = intersectMatch[2]
         config.objectIds = intersectMatch[3] ? intersectMatch[3].split(',')
@@ -215,6 +352,28 @@ function extractComponentConfig(html: string, type: string): any {
           .filter(id => id)
           .map(id => id.replace(/['"]/g, ''))
           .join(',') : ""
+      } else {
+        // Try to match getDiscountedProductsFromCategory
+        intersectMatch = html.match(/x-intersect[^"]*"[^"]*getDiscountedProductsFromCategory\((\d+),\s*['"]?(\d+)['"]?(?:,\s*\[(.*?)\])?\)/);
+        if (intersectMatch) {
+          config.categoryNumber = intersectMatch[2]
+          config.objectIds = intersectMatch[3] ? intersectMatch[3].split(',')
+            .map(id => id.trim())
+            .filter(id => id)
+            .map(id => id.replace(/['"]/g, ''))
+            .join(',') : ""
+        } else {
+          // Try to match getProductsManual
+          intersectMatch = html.match(/x-intersect[^"]*"[^"]*getProductsManual\(\[(.*?)\]\)/);
+          if (intersectMatch) {
+            config.categoryNumber = ""
+            config.objectIds = intersectMatch[1] ? intersectMatch[1].split(',')
+              .map(id => id.trim())
+              .filter(id => id)
+              .map(id => id.replace(/['"]/g, ''))
+              .join(',') : ""
+          }
+        }
       }
 
       config.sale = html.includes('class="old-price"') ? "yes" : "no"
@@ -280,98 +439,175 @@ function extractComponentConfig(html: string, type: string): any {
 export function parseComponents(html: string): ComponentType[] {
   const components: ComponentType[] = []
   
-  // Remove <div id="ZA_body_fix">...</div> wrapper if present
-  html = html.replace(/<div\s+id=["']ZA_body_fix["'][^>]*>([\s\S]*?)<\/div>/i, '$1')
+  // Clean the pasted code first - removes <div id="ZA_body_fix"> wrapper and other common elements
+  html = cleanPastedCode(html)
 
+  // Remove scripts, styles, and links
   html = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
   html = html.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
   html = html.replace(/<link[^>]*rel="stylesheet"[^>]*>/gi, '')
   
-  // First try to parse components with special comments
+  // Parse components in order of appearance
+  const allComponents: Array<{type: string, html: string, id: string, order: number, originalHtml: string}> = []
+  
+  // First, find all components with special comments and mark their positions
   const commentRegex = /<!-- COMPONENT_START (.*?) -->([\s\S]*?)<!-- COMPONENT_END \1 -->/g
   let match
-  let remainingHtml = html
-  const processedRanges: [number, number][] = []
-
+  let commentIndex = 0
+  
   while ((match = commentRegex.exec(html)) !== null) {
     const id = match[1]
     const componentHtml = match[2].trim()
-    
     const type = detectComponentType(componentHtml)
-    const config = extractComponentConfig(componentHtml, type)
     
-    components.push({
+    allComponents.push({
+      type,
+      html: componentHtml,
       id,
-      type,
-      config,
-      html: componentHtml
-    })
-
-    processedRanges.push([match.index, match.index + match[0].length])
-  }
-
-  // If no components found with comments, try parsing the entire HTML
-  if (components.length === 0) {
-    const type = detectComponentType(html)
-    const config = extractComponentConfig(html, type)
-    
-    components.push({
-      id: `${type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      type,
-      config,
-      html: html.trim()
+      order: match.index, // Use the actual position in the HTML
+      originalHtml: componentHtml
     })
   }
-
-  processedRanges.sort((a, b) => b[0] - a[0]).forEach(([start, end]) => {
-    remainingHtml = remainingHtml.slice(0, start) + remainingHtml.slice(end)
-  })
-
-  let depth = 0
-  let currentStart = -1
-  const componentRanges: { start: number, end: number }[] = []
   
-  const tagRegex = /<(\/)?([a-zA-Z][a-zA-Z0-9-_]*)[^>]*?(\/)?>/g
-  while ((match = tagRegex.exec(remainingHtml)) !== null) {
-    const isClosingTag = match[1] === '/'
-    const isSelfClosingTag = match[3] === '/'
-    const tag = match[2].toLowerCase()
-    
-    if (!isSelfClosingTag) {
-      if (!isClosingTag) {
-        depth++
-        if (depth === 1) {
-          currentStart = match.index
-        }
-      } else {
-        depth--
-        if (depth === 0 && currentStart !== -1) {
-          componentRanges.push({
-            start: currentStart,
-            end: match.index + match[0].length
-          })
-          currentStart = -1
-        }
-      }
+  // Now find all other complete HTML structures (components without special comments)
+  // We'll parse the entire HTML and identify complete tag structures
+  // First, collect the ranges of commented components to exclude them
+  const excludeRanges: Array<{start: number, end: number}> = []
+  allComponents.forEach(comp => {
+    const start = html.indexOf(comp.html)
+    if (start !== -1) {
+      excludeRanges.push({
+        start: start,
+        end: start + comp.html.length
+      })
     }
-  }
-
-  componentRanges.forEach(({ start, end }) => {
-    const componentHtml = remainingHtml.slice(start, end).trim()
+  })
+  
+  const completeStructures = findCompleteHtmlStructures(html, excludeRanges)
+  
+  // Add complete structures that don't overlap with commented components
+  // We need to determine their actual position in the HTML to maintain order
+  completeStructures.forEach((structure) => {
+    const type = detectComponentType(structure.html)
+    const id = `${type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
     
-    const cleanedHtml = cleanHtml(componentHtml)
-    const type = detectComponentType(cleanedHtml)
-    const config = extractComponentConfig(cleanedHtml, type)
+    allComponents.push({
+      type,
+      html: structure.html,
+      id,
+      order: structure.start, // Use the actual position in HTML for ordering
+      originalHtml: structure.html
+    })
+  })
+  
+  // Sort components by their position in the original HTML
+  allComponents.sort((a, b) => a.order - b.order)
+  
+  // Debug logging to verify order
+  console.log('[parseComponents] Component order:', allComponents.map(c => ({ type: c.type, order: c.order, position: c.order })))
+  
+  // Convert to final component format
+  allComponents.forEach((comp) => {
+    const config = extractComponentConfig(comp.html, comp.type)
     
     components.push({
-      id: `${type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      type,
+      id: comp.id,
+      type: comp.type,
       config,
-      html: cleanedHtml
+      html: comp.originalHtml // Use the original HTML to preserve formatting
     })
   })
 
   return components
+}
+
+function findCompleteHtmlStructures(html: string, excludeRanges: Array<{start: number, end: number}> = []): Array<{html: string, start: number, end: number}> {
+  const structures: Array<{html: string, start: number, end: number}> = []
+  let currentIndex = 0
+  
+  while (currentIndex < html.length) {
+    // Skip whitespace and comments
+    while (currentIndex < html.length && /[\s\n\r]/.test(html[currentIndex])) {
+      currentIndex++
+    }
+    
+    if (currentIndex >= html.length) break
+    
+    // Skip HTML comments
+    if (html.substring(currentIndex, currentIndex + 4) === '<!--') {
+      const commentEnd = html.indexOf('-->', currentIndex)
+      if (commentEnd === -1) break
+      currentIndex = commentEnd + 3
+      continue
+    }
+    
+    // Look for opening tag
+    const tagMatch = html.substring(currentIndex).match(/<([a-zA-Z][a-zA-Z0-9-_]*)[^>]*>/)
+    if (!tagMatch) {
+      currentIndex++
+      continue
+    }
+    
+    const tagName = tagMatch[1].toLowerCase()
+    const tagStart = currentIndex + tagMatch.index!
+    
+    // Skip self-closing tags
+    if (tagMatch[0].endsWith('/>')) {
+      currentIndex = tagStart + tagMatch[0].length
+      continue
+    }
+    
+    // Find the corresponding closing tag
+    let depth = 0
+    let closingTagIndex = -1
+    
+    for (let i = tagStart; i < html.length; i++) {
+      if (html.substring(i, i + 1) === '<') {
+        if (html.substring(i, i + 2) === '</') {
+          // Closing tag
+          const closingTagMatch = html.substring(i).match(/<\/([a-zA-Z][a-zA-Z0-9-_]*)[^>]*>/)
+          if (closingTagMatch && closingTagMatch[1].toLowerCase() === tagName) {
+            depth--
+            if (depth === 0) {
+              closingTagIndex = i + closingTagMatch[0].length
+              break
+            }
+          }
+        } else {
+          // Opening tag
+          const openingTagMatch = html.substring(i).match(/<([a-zA-Z][a-zA-Z0-9-_]*)[^>]*>/)
+          if (openingTagMatch && openingTagMatch[1].toLowerCase() === tagName) {
+            depth++
+          }
+        }
+      }
+    }
+    
+    if (closingTagIndex !== -1) {
+      const componentHtml = html.substring(tagStart, closingTagIndex).trim()
+      
+      // Check if this range overlaps with any excluded ranges
+      const isOverlapping = excludeRanges.some(range => 
+        (tagStart >= range.start && tagStart < range.end) ||
+        (closingTagIndex > range.start && closingTagIndex <= range.end) ||
+        (tagStart <= range.start && closingTagIndex >= range.end)
+      )
+      
+      if (!isOverlapping && componentHtml.length > 0) {
+        structures.push({
+          html: componentHtml,
+          start: tagStart,
+          end: closingTagIndex
+        })
+      }
+      
+      currentIndex = closingTagIndex
+    } else {
+      currentIndex++
+    }
+  }
+  
+  return structures
 }
 
 function cleanHtml(html: string): string {
@@ -386,4 +622,44 @@ function cleanHtml(html: string): string {
   html = html.replace(/\s+aria-[^=\s>]+(="[^"]*")?/g, '')
   
   return html.trim()
+}
+
+function addComponentIdToFirstElement(html: string, componentId: string): string {
+  // Find the first HTML element (not comment or text)
+  const firstElementMatch = html.match(/<([a-zA-Z][a-zA-Z0-9]*)[^>]*>/)
+  
+  if (!firstElementMatch) {
+    return html
+  }
+
+  const firstElement = firstElementMatch[0]
+  const tagName = firstElementMatch[1]
+  
+  // Check if the element already has a data-component-id attribute
+  if (firstElement.includes('data-component-id=')) {
+    return html
+  }
+
+  // For showroom components, try to find the main showroom-component div
+  if (componentId.includes('products-showroom')) {
+    const showroomMatch = html.match(/<div[^>]*class="showroom-component"[^>]*>/)
+    if (showroomMatch) {
+      const showroomElement = showroomMatch[0]
+      if (!showroomElement.includes('data-component-id=')) {
+        const newShowroomElement = showroomElement.replace(
+          /<div([^>]*class="showroom-component"[^>]*)>/,
+          `<div$1 data-component-id="${componentId}">`
+        )
+        return html.replace(showroomElement, newShowroomElement)
+      }
+    }
+  }
+
+  // Add data-component-id attribute to the first element
+  const newFirstElement = firstElement.replace(
+    new RegExp(`<${tagName}([^>]*)>`),
+    `<${tagName}$1 data-component-id="${componentId}">`
+  )
+
+  return html.replace(firstElement, newFirstElement)
 }
